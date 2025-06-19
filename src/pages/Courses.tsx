@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -36,88 +38,71 @@ import {
   Search,
   Edit,
   Trash2,
-  Calendar,
+  Save,
+  X,
   AlertCircle,
   CheckCircle,
+  Calendar,
+  FileText,
 } from "lucide-react";
-import { CoursePoint } from "@/lib/gym-types";
 import {
   getCoursePoints,
-  createCoursePoint,
+  saveCoursePoint,
   updateCoursePoint,
   deleteCoursePoint,
   searchCoursePoints,
-  initializeTables,
-} from "@/lib/gym-database";
-import DatabaseSetupWarning from "@/components/DatabaseSetupWarning";
+} from "@/lib/database-offline";
+import { CoursePoint } from "@/lib/types-new";
+import { format } from "date-fns";
+import { ar } from "date-fns/locale";
 
 export default function Courses() {
-  const [courses, setCourses] = useState<CoursePoint[]>([]);
+  const [coursePoints, setCoursePoints] = useState<CoursePoint[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [courseToEdit, setCourseToEdit] = useState<CoursePoint | null>(null);
-  const [courseToDelete, setCourseToDelete] = useState<CoursePoint | null>(
-    null,
-  );
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [needsSetup, setNeedsSetup] = useState(false);
 
-  // Form data
+  // Modal state
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  // Form state
   const [formData, setFormData] = useState({
     name: "",
     description: "",
   });
+  const [editingCourse, setEditingCourse] = useState<CoursePoint | null>(null);
+  const [courseToDelete, setCourseToDelete] = useState<CoursePoint | null>(
+    null,
+  );
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    loadCourses();
+    loadCoursePoints();
   }, []);
 
   useEffect(() => {
-    if (searchTerm) {
+    if (searchTerm.trim()) {
       handleSearch();
     } else {
-      loadCourses();
+      loadCoursePoints();
     }
   }, [searchTerm]);
 
-  const loadCourses = async () => {
+  const loadCoursePoints = async () => {
     try {
       setIsLoading(true);
       setError(null);
-      setNeedsSetup(false);
-
-      // Try to initialize tables first
-      try {
-        await initializeTables();
-      } catch (initError) {
-        if (
-          initError instanceof Error &&
-          initError.message === "TABLES_NOT_EXIST"
-        ) {
-          setNeedsSetup(true);
-          return;
-        }
-      }
-
-      const coursesData = await getCoursePoints();
-      setCourses(coursesData);
+      const data = await getCoursePoints();
+      setCoursePoints(data);
     } catch (error) {
-      console.error("Error loading courses:", error);
-      if (
-        error instanceof Error &&
-        (error.message.includes("does not exist") ||
-          error.message.includes("relation") ||
-          error.message === "TABLES_NOT_EXIST")
-      ) {
-        setNeedsSetup(true);
-      } else {
-        setError("فشل في تحميل التمارين");
-      }
+      console.error("Error loading course points:", error);
+      setError(
+        error instanceof Error ? error.message : "خطأ في تحميل البيانات",
+      );
     } finally {
       setIsLoading(false);
     }
@@ -125,284 +110,253 @@ export default function Courses() {
 
   const handleSearch = async () => {
     try {
-      const searchResults = await searchCoursePoints(searchTerm);
-      setCourses(searchResults);
+      setError(null);
+      const data = await searchCoursePoints(searchTerm);
+      setCoursePoints(data);
     } catch (error) {
-      console.error("Error searching courses:", error);
-      setError("فشل في البحث عن التمارين");
+      console.error("Error searching course points:", error);
+      setError(error instanceof Error ? error.message : "خطأ في البحث");
     }
   };
 
-  const handleAddCourse = async () => {
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
     if (!formData.name.trim()) {
-      setError("اسم التمرين مطلوب");
-      return;
+      errors.name = "اسم التمرين مطلوب";
+    } else if (formData.name.trim().length < 2) {
+      errors.name = "اسم التمرين يجب أن يكون على الأقل حرفين";
     }
 
-    try {
-      setIsSaving(true);
-      await createCoursePoint(
-        formData.name.trim(),
-        formData.description.trim(),
-      );
-      await loadCourses();
-      setAddDialogOpen(false);
-      setFormData({ name: "", description: "" });
-      setSuccess("تم إضافة التمرين بنجاح");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error) {
-      console.error("Error adding course:", error);
-      setError("فشل في إضافة التمرين");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    // Check for duplicate names (excluding current course when editing)
+    const isDuplicate = coursePoints.some(
+      (course) =>
+        course.name.toLowerCase() === formData.name.trim().toLowerCase() &&
+        course.id !== editingCourse?.id,
+    );
 
-  const handleEditCourse = async () => {
-    if (!courseToEdit || !formData.name.trim()) {
-      setError("اسم التمرين مطلوب");
-      return;
+    if (isDuplicate) {
+      errors.name = "اسم التمرين موجود بالفعل";
     }
 
-    try {
-      setIsSaving(true);
-      await updateCoursePoint(
-        courseToEdit.id,
-        formData.name.trim(),
-        formData.description.trim(),
-      );
-      await loadCourses();
-      setEditDialogOpen(false);
-      setCourseToEdit(null);
-      setFormData({ name: "", description: "" });
-      setSuccess("تم تحديث التمرين بنجاح");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error) {
-      console.error("Error updating course:", error);
-      setError("فشل في تحديث التمرين");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteCourse = async () => {
-    if (!courseToDelete) return;
-
-    try {
-      setIsSaving(true);
-      await deleteCoursePoint(courseToDelete.id);
-      await loadCourses();
-      setDeleteDialogOpen(false);
-      setCourseToDelete(null);
-      setSuccess("تم حذف التمرين بنجاح");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error) {
-      console.error("Error deleting course:", error);
-      setError("فشل في حذف التمرين");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const openEditDialog = (course: CoursePoint) => {
-    setCourseToEdit(course);
-    setFormData({
-      name: course.name,
-      description: course.description || "",
-    });
-    setEditDialogOpen(true);
-  };
-
-  const openDeleteDialog = (course: CoursePoint) => {
-    setCourseToDelete(course);
-    setDeleteDialogOpen(true);
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const resetForm = () => {
     setFormData({ name: "", description: "" });
-    setError(null);
+    setFormErrors({});
+    setEditingCourse(null);
+  };
+
+  const handleAdd = () => {
+    resetForm();
+    setAddModalOpen(true);
+  };
+
+  const handleEdit = (course: CoursePoint) => {
+    setFormData({
+      name: course.name,
+      description: course.description || "",
+    });
+    setEditingCourse(course);
+    setFormErrors({});
+    setEditModalOpen(true);
+  };
+
+  const handleDelete = (course: CoursePoint) => {
+    setCourseToDelete(course);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) return;
+
+    try {
+      setIsSaving(true);
+      setError(null);
+
+      await saveCoursePoint(formData.name.trim(), formData.description.trim());
+
+      setSuccess("تم إضافة التمرين بنجاح");
+      setAddModalOpen(false);
+      resetForm();
+      await loadCoursePoints();
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error("Error saving course point:", error);
+      setError(error instanceof Error ? error.message : "خطأ في حفظ التمرين");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!validateForm() || !editingCourse) return;
+
+    try {
+      setIsSaving(true);
+      setError(null);
+
+      await updateCoursePoint(
+        editingCourse.id,
+        formData.name.trim(),
+        formData.description.trim(),
+      );
+
+      setSuccess("تم تحديث التمرين بنجاح");
+      setEditModalOpen(false);
+      resetForm();
+      await loadCoursePoints();
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error("Error updating course point:", error);
+      setError(error instanceof Error ? error.message : "خطأ في تحديث التمرين");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!courseToDelete) return;
+
+    try {
+      setError(null);
+      await deleteCoursePoint(courseToDelete.id);
+      setSuccess("تم حذف التمرين بنجاح");
+      setDeleteDialogOpen(false);
+      setCourseToDelete(null);
+      await loadCoursePoints();
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error("Error deleting course point:", error);
+      setError(error instanceof Error ? error.message : "خطأ في حذف التمرين");
+    }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("ar-SA", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    try {
+      return format(new Date(dateString), "dd MMMM yyyy", { locale: ar });
+    } catch {
+      return "تاريخ غير صحيح";
+    }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">جاري تحميل التمارين...</p>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto"></div>
+          <h2 className="text-xl font-semibold text-gray-900">
+            جاري تحميل التمارين...
+          </h2>
         </div>
       </div>
     );
   }
 
-  if (needsSetup) {
-    return <DatabaseSetupWarning onRetry={loadCourses} />;
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
-      <div className="max-w-6xl mx-auto p-6">
+    <div
+      className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-6"
+      dir="rtl"
+    >
+      <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-500 rounded-full">
-                <GraduationCap className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">الكورسات</h1>
-                <p className="text-gray-600">إدارة مكتبة التمارين والكورسات</p>
-              </div>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl text-white">
+              <GraduationCap className="h-8 w-8" />
             </div>
-            <Dialog
-              open={addDialogOpen}
-              onOpenChange={(open) => {
-                setAddDialogOpen(open);
-                if (!open) resetForm();
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                  size="lg"
-                >
-                  <Plus className="w-5 h-5 ml-2" />
-                  إضافة تمرين جديد
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>إضافة تمرين جديد</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="add-name">اسم التمرين *</Label>
-                    <Input
-                      id="add-name"
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          name: e.target.value,
-                        }))
-                      }
-                      placeholder="مثال: بنش برس، سكوات..."
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="add-description">الوصف (اختياري)</Label>
-                    <Textarea
-                      id="add-description"
-                      value={formData.description}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          description: e.target.value,
-                        }))
-                      }
-                      placeholder="وصف مختصر للتمرين..."
-                      rows={3}
-                    />
-                  </div>
-
-                  {error && (
-                    <Alert className="border-red-200 bg-red-50">
-                      <AlertCircle className="h-4 w-4 text-red-600" />
-                      <AlertDescription className="text-red-700">
-                        {error}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setAddDialogOpen(false)}
-                    >
-                      إلغاء
-                    </Button>
-                    <Button
-                      onClick={handleAddCourse}
-                      disabled={isSaving}
-                      className="bg-orange-500 hover:bg-orange-600"
-                    >
-                      {isSaving ? "جاري الحفظ..." : "إضافة"}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                إدارة التمارين
+              </h1>
+              <p className="text-gray-600">
+                إضافة وتحرير التمارين المتاحة في الصالة
+              </p>
+            </div>
           </div>
 
-          {/* Success Message */}
-          {success && (
-            <Alert className="mb-6 border-green-200 bg-green-50">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-700">
-                {success}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Error Message */}
-          {error && (
-            <Alert className="mb-6 border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-700">
-                {error}
-              </AlertDescription>
-            </Alert>
-          )}
+          <Button
+            onClick={handleAdd}
+            className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+          >
+            <Plus className="h-5 w-5 ml-2" />
+            إضافة تمرين جديد
+          </Button>
         </div>
 
         {/* Search Bar */}
-        <Card className="mb-6">
-          <CardContent className="p-4">
+        <Card>
+          <CardContent className="pt-6">
             <div className="relative">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Search className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
               <Input
-                placeholder="البحث عن تمرين..."
+                placeholder="البحث في التمارين (الاسم أو الوصف)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pr-10 bg-white border-gray-200"
+                className="pr-10 text-right"
               />
             </div>
           </CardContent>
         </Card>
 
-        {/* Courses Table */}
+        {/* Success Message */}
+        {success && (
+          <Alert className="border-green-200 bg-green-50">
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription className="text-green-700">
+              {success}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Error Message */}
+        {error && (
+          <Alert className="border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-red-700">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Course Points Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl font-bold text-gray-900">
-              قائمة التمارين ({courses.length})
-            </CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle className="text-xl">
+                قائمة التمارين ({coursePoints.length})
+              </CardTitle>
+              {searchTerm && (
+                <Badge variant="secondary">
+                  نتائج البحث: {coursePoints.length}
+                </Badge>
+              )}
+            </div>
           </CardHeader>
-          <CardContent className="p-0">
-            {courses.length === 0 ? (
-              <div className="text-center py-16">
+          <CardContent>
+            {coursePoints.length === 0 ? (
+              <div className="text-center py-12">
                 <GraduationCap className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-lg mb-4">
+                <h3 className="text-xl font-semibold text-gray-500 mb-2">
                   {searchTerm ? "لا توجد نتائج للبحث" : "لا توجد تمارين"}
+                </h3>
+                <p className="text-gray-400 mb-6">
+                  {searchTerm
+                    ? "جرب البحث بكلمات أخرى"
+                    : "ابدأ بإضافة أول تمرين"}
                 </p>
                 {!searchTerm && (
-                  <Button
-                    onClick={() => setAddDialogOpen(true)}
-                    className="bg-orange-500 hover:bg-orange-600"
-                  >
-                    <Plus className="w-4 h-4 ml-2" />
-                    إضافة أول تمرين
+                  <Button onClick={handleAdd} className="bg-blue-500">
+                    <Plus className="h-5 w-5 ml-2" />
+                    إضافة تمرين جديد
                   </Button>
                 )}
               </div>
@@ -417,32 +371,41 @@ export default function Courses() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {courses.map((course) => (
+                  {coursePoints.map((course) => (
                     <TableRow key={course.id}>
                       <TableCell className="font-medium">
                         {course.name}
                       </TableCell>
-                      <TableCell className="text-gray-600">
-                        {course.description || "لا ي��جد وصف"}
+                      <TableCell className="text-gray-600 max-w-xs">
+                        {course.description ? (
+                          <span>{course.description}</span>
+                        ) : (
+                          <span className="text-gray-400 italic">
+                            لا يوجد وصف
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-gray-500">
-                        {formatDate(course.created_at)}
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          {formatDate(course.created_at)}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           <Button
-                            size="sm"
                             variant="outline"
-                            onClick={() => openEditDialog(course)}
-                            className="text-blue-600 hover:text-blue-700"
+                            size="sm"
+                            onClick={() => handleEdit(course)}
+                            className="border-blue-200 text-blue-600 hover:bg-blue-50"
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button
-                            size="sm"
                             variant="outline"
-                            onClick={() => openDeleteDialog(course)}
-                            className="text-red-600 hover:text-red-700"
+                            size="sm"
+                            onClick={() => handleDelete(course)}
+                            className="border-red-200 text-red-600 hover:bg-red-50"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -457,72 +420,132 @@ export default function Courses() {
         </Card>
       </div>
 
-      {/* Edit Dialog */}
-      <Dialog
-        open={editDialogOpen}
-        onOpenChange={(open) => {
-          setEditDialogOpen(open);
-          if (!open) {
-            setCourseToEdit(null);
-            resetForm();
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
+      {/* Add Course Dialog */}
+      <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>إضافة تمرين جديد</DialogTitle>
+            <DialogDescription>
+              أدخل بيانات التمرين الجديد الذي تريد إضافته
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="add-name">اسم التمرين *</Label>
+              <Input
+                id="add-name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData({ ...formData, name: e.target.value })
+                }
+                placeholder="مثلاً: بنج أمامي، سكوات..."
+                className={formErrors.name ? "border-red-500" : ""}
+              />
+              {formErrors.name && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="add-description">الوصف (اختياري)</Label>
+              <Textarea
+                id="add-description"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                placeholder="وصف مختصر للتمرين..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={handleSave}
+                disabled={isSaving}
+                className="flex-1 bg-blue-500 hover:bg-blue-600"
+              >
+                {isSaving ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <Save className="h-4 w-4 ml-2" />
+                )}
+                {isSaving ? "جاري الحفظ..." : "حفظ"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setAddModalOpen(false)}
+                disabled={isSaving}
+              >
+                <X className="h-4 w-4 ml-2" />
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Course Dialog */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent dir="rtl">
           <DialogHeader>
             <DialogTitle>تعديل التمرين</DialogTitle>
+            <DialogDescription>
+              قم بتعديل بيانات التمرين "{editingCourse?.name}"
+            </DialogDescription>
           </DialogHeader>
+
           <div className="space-y-4">
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="edit-name">اسم التمرين *</Label>
               <Input
                 id="edit-name"
                 value={formData.name}
                 onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                  setFormData({ ...formData, name: e.target.value })
                 }
                 placeholder="اسم التمرين"
-                required
+                className={formErrors.name ? "border-red-500" : ""}
               />
+              {formErrors.name && (
+                <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
+              )}
             </div>
-            <div className="space-y-2">
+
+            <div>
               <Label htmlFor="edit-description">الوصف (اختياري)</Label>
               <Textarea
                 id="edit-description"
                 value={formData.description}
                 onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    description: e.target.value,
-                  }))
+                  setFormData({ ...formData, description: e.target.value })
                 }
-                placeholder="وصف التمرين..."
+                placeholder="وصف مختصر للتمرين..."
                 rows={3}
               />
             </div>
 
-            {error && (
-              <Alert className="border-red-200 bg-red-50">
-                <AlertCircle className="h-4 w-4 text-red-600" />
-                <AlertDescription className="text-red-700">
-                  {error}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="flex justify-end gap-2">
+            <div className="flex gap-2 pt-4">
               <Button
-                variant="outline"
-                onClick={() => setEditDialogOpen(false)}
+                onClick={handleUpdate}
+                disabled={isSaving}
+                className="flex-1 bg-blue-500 hover:bg-blue-600"
               >
-                إلغاء
+                {isSaving ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <Save className="h-4 w-4 ml-2" />
+                )}
+                {isSaving ? "جاري التحديث..." : "تحديث"}
               </Button>
               <Button
-                onClick={handleEditCourse}
+                variant="outline"
+                onClick={() => setEditModalOpen(false)}
                 disabled={isSaving}
-                className="bg-orange-500 hover:bg-orange-600"
               >
-                {isSaving ? "جاري التحديث..." : "تحديث"}
+                <X className="h-4 w-4 ml-2" />
+                إلغاء
               </Button>
             </div>
           </div>
@@ -533,20 +556,24 @@ export default function Courses() {
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
-            <AlertDialogDescription>
-              هل أنت متأكد من حذف التمرين "{courseToDelete?.name}"؟ لا يمكن
-              التراجع عن هذا الإجراء.
+            <AlertDialogTitle className="text-right">
+              تأكيد الحذف
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-right">
+              هل أنت متأكد من حذف التمرين "{courseToDelete?.name}"؟
+              <br />
+              <span className="text-red-600 font-medium">
+                هذا الإجراء لا يمكن التراجع عنه.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="gap-2">
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteCourse}
-              className="bg-red-500 hover:bg-red-600"
-              disabled={isSaving}
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
             >
-              {isSaving ? "جاري الحذف..." : "حذف"}
+              حذف نهائي
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

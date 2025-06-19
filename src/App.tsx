@@ -1,217 +1,210 @@
-import {
-  BrowserRouter as Router,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
-import { useEffect } from "react";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import "./styles/print.css";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+
+// Import offline support
+import { initializeOfflineSupport } from "@/lib/database-offline";
+
+// Pages
 import Login from "./pages/Login";
-import Index from "./pages/Index";
-import Members from "./pages/Members";
-import AddMember from "./pages/AddMember";
-import AddMemberEnhanced from "./pages/AddMemberEnhanced";
+import Subscribers from "./pages/Subscribers";
+import AddSubscriber from "./pages/AddSubscriber";
 import Courses from "./pages/Courses";
-import CoursesEnhanced from "./pages/CoursesEnhanced";
 import DietPlans from "./pages/DietPlans";
-import DietPlansEnhanced from "./pages/DietPlansEnhanced";
 import Inventory from "./pages/Inventory";
-import InventoryEnhanced from "./pages/InventoryEnhanced";
+import SystemDiagnostics from "./pages/SystemDiagnostics";
+import PrintSubscriber from "./pages/PrintSubscriber";
+import PrintInvoice from "./pages/PrintInvoice";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+
+// Components
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { initOfflineSupport } from "./lib/offline-manager";
-import "./App.css";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
+import ErrorBoundary from "./components/ErrorBoundary";
 
-function App() {
-  useEffect(() => {
-    // Initialize offline support
-    initOfflineSupport().catch(console.error);
+// Utils
+import { getAuthState } from "@/lib/auth-new";
+import {
+  checkDatabaseInitialization,
+  initializeDatabaseWithSampleData,
+} from "@/lib/database-init";
 
-    // Add meta tags for mobile app
-    const viewport = document.querySelector('meta[name="viewport"]');
-    if (viewport) {
-      viewport.setAttribute(
-        "content",
-        "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover",
-      );
-    }
+// Loading component
+const AppLoading = () => (
+  <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 flex items-center justify-center">
+    <div className="text-center space-y-4">
+      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto"></div>
+      <h2 className="text-xl font-semibold text-gray-900">
+        جاري تحميل النظام...
+      </h2>
+      <p className="text-gray-600">يرجى الانتظار قليلاً</p>
+    </div>
+  </div>
+);
 
-    // Add theme color
-    const themeColor = document.querySelector('meta[name="theme-color"]');
-    if (!themeColor) {
-      const meta = document.createElement("meta");
-      meta.name = "theme-color";
-      meta.content = "#f97316";
-      document.head.appendChild(meta);
-    }
+// Database error component
+const DatabaseError = ({ error }: { error: string }) => (
+  <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex items-center justify-center p-4">
+    <div className="text-center space-y-6 max-w-2xl">
+      <div className="text-red-500 text-6xl">⚠️</div>
+      <h2 className="text-2xl font-bold text-gray-900">
+        خطأ في إعداد قاعدة البيانات
+      </h2>
+      <div className="bg-white p-6 rounded-lg border border-red-200 text-right">
+        <p className="text-red-700 mb-4">{error}</p>
+        <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-700">
+          <h3 className="font-semibold mb-2">خطوات الحل:</h3>
+          <ol className="list-decimal list-inside space-y-1">
+            <li>انتقل إلى لوحة تحكم Supabase</li>
+            <li>اذهب إلى قسم SQL Editor</li>
+            <li>انسخ والصق محتوى ملف gym-management-new-schema.sql</li>
+            <li>اضغط Run لتنفيذ الاستعلام</li>
+            <li>أعد تحميل الصفحة</li>
+          </ol>
+        </div>
+      </div>
+      <button
+        onClick={() => window.location.reload()}
+        className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-6 rounded-lg transition-colors"
+      >
+        إعادة تحميل الصفحة
+      </button>
+    </div>
+  </div>
+);
 
-    // Add apple mobile web app capable
-    const appleMeta = document.querySelector(
-      'meta[name="apple-mobile-web-app-capable"]',
-    );
-    if (!appleMeta) {
-      const meta = document.createElement("meta");
-      meta.name = "apple-mobile-web-app-capable";
-      meta.content = "yes";
-      document.head.appendChild(meta);
-    }
+const queryClient = new QueryClient();
 
-    // Add apple status bar style
-    const appleStatus = document.querySelector(
-      'meta[name="apple-mobile-web-app-status-bar-style"]',
-    );
-    if (!appleStatus) {
-      const meta = document.createElement("meta");
-      meta.name = "apple-mobile-web-app-status-bar-style";
-      meta.content = "default";
-      document.head.appendChild(meta);
-    }
+const App = () => {
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [authState, setAuthState] = useState<{
+    isAuthenticated: boolean;
+  } | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
 
-    // Add app title for Apple
-    const appleTitle = document.querySelector(
-      'meta[name="apple-mobile-web-app-title"]',
-    );
-    if (!appleTitle) {
-      const meta = document.createElement("meta");
-      meta.name = "apple-mobile-web-app-title";
-      meta.content = "صالة حسام";
-      document.head.appendChild(meta);
-    }
+  const initializeApp = async () => {
+    try {
+      // Initialize offline support first
+      initializeOfflineSupport();
 
-    // Install prompt for PWA
-    let deferredPrompt: any;
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      deferredPrompt = e;
+      // Get auth state immediately and continue
+      const auth = getAuthState();
+      setAuthState(auth);
+      setIsInitialized(true);
+      setDbError(null);
 
-      // Show install prompt after a delay
-      setTimeout(() => {
-        if (deferredPrompt && !localStorage.getItem("pwa-install-dismissed")) {
-          const shouldInstall = confirm(
-            "هل تريد تثبيت تطبيق صالة حسام على جهازك؟",
-          );
-          if (shouldInstall) {
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then((choiceResult: any) => {
-              if (choiceResult.outcome === "accepted") {
-                console.log("User accepted the install prompt");
-              } else {
-                console.log("User dismissed the install prompt");
-                localStorage.setItem("pwa-install-dismissed", "true");
-              }
-              deferredPrompt = null;
-            });
-          } else {
-            localStorage.setItem("pwa-install-dismissed", "true");
+      // Do database initialization in background without blocking
+      setTimeout(async () => {
+        try {
+          const dbStatus = await checkDatabaseInitialization();
+          if (navigator.onLine && dbStatus.isInitialized) {
+            await initializeDatabaseWithSampleData();
           }
+        } catch (error) {
+          console.warn("Background initialization failed:", error);
         }
-      }, 5000); // Show after 5 seconds
-    };
+      }, 100);
+    } catch (error) {
+      console.error("App initialization failed:", error);
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      // Always continue - don't block the app
+      const auth = getAuthState();
+      setAuthState(auth || { isAuthenticated: false });
+      setIsInitialized(true);
+      setDbError(null);
+    }
+  };
 
-    // Listen for app installed
-    window.addEventListener("appinstalled", () => {
-      console.log("PWA was installed");
-      localStorage.removeItem("pwa-install-dismissed");
-    });
-
-    return () => {
-      window.removeEventListener(
-        "beforeinstallprompt",
-        handleBeforeInstallPrompt,
-      );
-    };
+  useEffect(() => {
+    initializeApp();
   }, []);
 
+  // Show loading while initializing
+  if (!isInitialized) {
+    return <AppLoading />;
+  }
+
+  // If authState is null, set a default one
+  if (!authState) {
+    const auth = getAuthState();
+    setAuthState(auth || { isAuthenticated: false });
+    return <AppLoading />;
+  }
+
+  // Show database error if database is not properly set up
+  if (dbError) {
+    return <DatabaseError error={dbError} />;
+  }
+
   return (
-    <Router>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/login" element={<Login />} />
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <PWAInstallPrompt />
+          <BrowserRouter>
+            <Routes>
+              {/* Redirect root to appropriate page based on auth */}
+              <Route
+                path="/"
+                element={
+                  authState.isAuthenticated ? (
+                    <Navigate to="/dashboard/subscribers" replace />
+                  ) : (
+                    <Navigate to="/login" replace />
+                  )
+                }
+              />
 
-        {/* Protected Routes with Layout */}
-        <Route
-          path="/*"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route
-                    path="/dashboard"
-                    element={<Navigate to="/dashboard/members" replace />}
-                  />
+              {/* Login page */}
+              <Route path="/login" element={<Login />} />
 
-                  {/* Enhanced Pages (Primary) */}
-                  <Route path="/dashboard/members" element={<Members />} />
-                  <Route
-                    path="/dashboard/add-member"
-                    element={<AddMemberEnhanced />}
-                  />
-                  <Route
-                    path="/dashboard/courses"
-                    element={<CoursesEnhanced />}
-                  />
-                  <Route
-                    path="/dashboard/diet-plans"
-                    element={<DietPlansEnhanced />}
-                  />
-                  <Route
-                    path="/dashboard/inventory"
-                    element={<InventoryEnhanced />}
-                  />
+              {/* Print page (no authentication required) */}
+              <Route path="/print/:id" element={<PrintSubscriber />} />
 
-                  {/* Legacy Routes (Fallback) */}
-                  <Route
-                    path="/dashboard/add-member-basic"
-                    element={<AddMember />}
-                  />
-                  <Route
-                    path="/dashboard/courses-basic"
-                    element={<Courses />}
-                  />
-                  <Route
-                    path="/dashboard/diet-plans-basic"
-                    element={<DietPlans />}
-                  />
-                  <Route
-                    path="/dashboard/inventory-basic"
-                    element={<Inventory />}
-                  />
+              {/* Protected dashboard routes */}
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Layout />
+                  </ProtectedRoute>
+                }
+              >
+                {/* Default dashboard route goes to subscribers */}
+                <Route index element={<Navigate to="subscribers" replace />} />
+                <Route path="subscribers" element={<Subscribers />} />
+                <Route path="add-subscriber" element={<AddSubscriber />} />
+                <Route
+                  path="/dashboard/print-subscriber/:id"
+                  element={<PrintSubscriber />}
+                />
+                <Route
+                  path="/dashboard/print-invoice/:id"
+                  element={<PrintInvoice />}
+                />
+                <Route path="/dashboard/settings" element={<Settings />} />
+                <Route path="courses" element={<Courses />} />
+                <Route path="diet-plans" element={<DietPlans />} />
+                <Route path="inventory" element={<Inventory />} />
+                <Route path="diagnostics" element={<SystemDiagnostics />} />
+              </Route>
 
-                  {/* Redirect old routes */}
-                  <Route
-                    path="/members"
-                    element={<Navigate to="/dashboard/members" replace />}
-                  />
-                  <Route
-                    path="/add-member"
-                    element={<Navigate to="/dashboard/add-member" replace />}
-                  />
-                  <Route
-                    path="/courses"
-                    element={<Navigate to="/dashboard/courses" replace />}
-                  />
-                  <Route
-                    path="/diet-plans"
-                    element={<Navigate to="/dashboard/diet-plans" replace />}
-                  />
-                  <Route
-                    path="/inventory"
-                    element={<Navigate to="/dashboard/inventory" replace />}
-                  />
-
-                  {/* 404 */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </Router>
+              {/* Catch all for 404 */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
-}
+};
 
 export default App;

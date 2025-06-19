@@ -1,98 +1,63 @@
 {
-  "name": "صالة حسام لكمال الأجسام",
+  "name": "صالة حسام لكمال الأجسام والرشاقة",
   "short_name": "صالة حسام",
-  "description": "نظام إدارة صالة حسام الرياضية - كمال أجسام ورشاقة",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#ffffff",
+  "description": "نظام إدارة صالة حسام لكمال الأجسام والرشاقة - إدارة الأعضاء والكورسات والأنظمة الغذائية",
   "theme_color": "#f97316",
-  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
   "scope": "/",
+  "start_url": "/",
   "lang": "ar",
   "dir": "rtl",
-  "categories": ["fitness", "health", "sports"],
   "icons": [
     {
-      "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=192",
+      "src": "/placeholder.svg",
       "sizes": "192x192",
-      "type": "image/webp",
-      "purpose": "any maskable"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=512",
+      "src": "/placeholder.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/placeholder.svg",
       "sizes": "512x512",
-      "type": "image/webp",
-      "purpose": "any maskable"
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=144",
-      "sizes": "144x144",
-      "type": "image/webp"
-    },
-    {
-      "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=96",
-      "sizes": "96x96",
-      "type": "image/webp"
-    },
-    {
-      "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=72",
-      "sizes": "72x72",
-      "type": "image/webp"
-    },
-    {
-      "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=48",
-      "sizes": "48x48",
-      "type": "image/webp"
+      "src": "/placeholder.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
-  "screenshots": [
-    {
-      "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=800",
-      "sizes": "800x600",
-      "type": "image/webp",
-      "form_factor": "wide"
-    }
-  ],
+  "categories": ["business", "health", "fitness"],
   "shortcuts": [
     {
       "name": "المشتركين",
       "short_name": "المشتركين",
-      "description": "عرض وإدارة المشتركين",
-      "url": "/dashboard/members",
-      "icons": [
-        {
-          "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=96",
-          "sizes": "96x96"
-        }
-      ]
+      "description": "عرض قائمة المشتركين",
+      "url": "/dashboard/subscribers",
+      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
     },
     {
       "name": "إضافة مشترك",
-      "short_name": "إضافة مشترك",
+      "short_name": "إضافة",
       "description": "إضافة مشترك جديد",
-      "url": "/dashboard/add-member",
-      "icons": [
-        {
-          "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=96",
-          "sizes": "96x96"
-        }
-      ]
+      "url": "/dashboard/add-subscriber",
+      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
     },
     {
-      "name": "الكورسات",
-      "short_name": "الكورسات",
-      "description": "إدارة التمارين والكورسات",
-      "url": "/dashboard/courses",
-      "icons": [
-        {
-          "src": "https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=96",
-          "sizes": "96x96"
-        }
-      ]
+      "name": "المخزون",
+      "short_name": "المخزون",
+      "description": "إدارة المخزون والمبيعات",
+      "url": "/dashboard/inventory",
+      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
     }
-  ],
-  "prefer_related_applications": false,
-  "edge_side_panel": {
-    "preferred_width": 400
-  }
+  ]
 }

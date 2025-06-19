@@ -1,61 +1,58 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
-  User,
-  Plus,
-  Trash2,
+  UserPlus,
   Save,
-  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronsUpDown,
+  X,
   GraduationCap,
   Apple,
+  User,
+  Calendar,
+  Ruler,
+  Weight,
   AlertCircle,
-  CheckCircle,
-  Edit,
-  X,
-  Wifi,
-  WifiOff,
+  Plus,
+  Trash2,
+  Edit3,
 } from "lucide-react";
-import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  createSubscriber,
-  updateSubscriber,
-  getSubscriberWithGroups,
-  createGroup,
-  deleteGroup,
-  getCoursePoints,
-  getDietItems,
-  initializeTables,
-} from "@/lib/gym-database";
-import { CoursePoint, DietItem, SubscriberWithGroups } from "@/lib/gym-types";
-import DatabaseSetupWarning from "@/components/DatabaseSetupWarning";
-import { offlineManager } from "@/lib/offline-manager";
-
-interface GroupData {
-  id?: string;
-  title: string;
-  type: "course" | "diet";
-  selectedItems: string[];
-}
+  Member,
+  Course,
+  DietPlan,
+  CourseGroup,
+  DietPlanGroup,
+} from "@/lib/types";
+import {
+  saveMember,
+  getCourses,
+  getDietPlans,
+  getMemberById,
+} from "@/lib/storage-new";
+import { saveSimpleMember } from "@/lib/simpleMemberStorage";
+import { cn } from "@/lib/utils";
 
 export default function AddMemberEnhanced() {
   const navigate = useNavigate();
@@ -63,850 +60,909 @@ export default function AddMemberEnhanced() {
   const editId = searchParams.get("edit");
   const isEditing = Boolean(editId);
 
+  // Error handling state
+  const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
   // Form state
   const [formData, setFormData] = useState({
     name: "",
-    age: 25,
-    weight: 70,
-    height: 170,
-    phone: "",
-    notes: "",
+    age: "",
+    height: "",
+    weight: "",
   });
 
-  // Groups state
-  const [courseGroups, setCourseGroups] = useState<GroupData[]>([]);
-  const [dietGroups, setDietGroups] = useState<GroupData[]>([]);
+  // Legacy support
+  const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [selectedDietPlans, setSelectedDietPlans] = useState<string[]>([]);
 
-  // Available options
-  const [coursePoints, setCoursePoints] = useState<CoursePoint[]>([]);
-  const [dietItems, setDietItems] = useState<DietItem[]>([]);
+  // New groups support
+  const [courseGroups, setCourseGroups] = useState<CourseGroup[]>([]);
+  const [dietPlanGroups, setDietPlanGroups] = useState<DietPlanGroup[]>([]);
 
-  // UI state
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [needsSetup, setNeedsSetup] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [dietPlans, setDietPlans] = useState<DietPlan[]>([]);
 
-  // Dialog states
-  const [addCourseGroupOpen, setAddCourseGroupOpen] = useState(false);
-  const [addDietGroupOpen, setAddDietGroupOpen] = useState(false);
-  const [editingGroup, setEditingGroup] = useState<GroupData | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Course group creation state
+  const [newCourseGroup, setNewCourseGroup] = useState({
+    title: "",
+    selectedCourses: [] as string[],
+  });
+  const [courseSearch, setCourseSearch] = useState("");
+  const [coursesOpen, setCoursesOpen] = useState(false);
+
+  // Diet plan group creation state
+  const [newDietPlanGroup, setNewDietPlanGroup] = useState({
+    title: "",
+    selectedDietPlans: [] as string[],
+  });
+  const [dietSearch, setDietSearch] = useState("");
+  const [dietPlansOpen, setDietPlansOpen] = useState(false);
 
   useEffect(() => {
     loadData();
+  }, []);
 
-    // Listen for online/offline events
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, [editId]);
+  useEffect(() => {
+    if (isEditing && editId && dataLoaded) {
+      loadMemberForEdit(editId);
+    }
+  }, [isEditing, editId, dataLoaded]);
 
   const loadData = async () => {
     try {
-      setIsLoading(true);
-      setError(null);
-      setNeedsSetup(false);
+      setHasError(false);
+      setErrorMessage("");
 
-      // Initialize tables
-      try {
-        await initializeTables();
-      } catch (initError) {
-        if (
-          initError instanceof Error &&
-          initError.message === "TABLES_NOT_EXIST"
-        ) {
-          setNeedsSetup(true);
-          return;
-        }
-      }
-
-      // Load available options
-      const [coursePointsData, dietItemsData] = await Promise.all([
-        getCoursePoints(),
-        getDietItems(),
+      const [coursesData, dietPlansData] = await Promise.all([
+        getCourses(),
+        getDietPlans(),
       ]);
 
-      setCoursePoints(coursePointsData);
-      setDietItems(dietItemsData);
+      const validCourses = Array.isArray(coursesData) ? coursesData : [];
+      const validDietPlans = Array.isArray(dietPlansData) ? dietPlansData : [];
 
-      // If editing, load existing data
-      if (isEditing && editId) {
-        await loadExistingMember(editId);
-      }
+      setCourses(validCourses);
+      setDietPlans(validDietPlans);
+      setDataLoaded(true);
     } catch (error) {
       console.error("Error loading data:", error);
-      if (
-        error instanceof Error &&
-        (error.message.includes("does not exist") ||
-          error.message.includes("relation") ||
-          error.message === "TABLES_NOT_EXIST")
-      ) {
-        setNeedsSetup(true);
-      } else if (
-        error instanceof Error &&
-        (error.message.includes("Failed to fetch") ||
-          error.message.includes("Network error") ||
-          error.message.includes("NetworkError") ||
-          error.message.includes("timeout"))
-      ) {
-        console.warn("Network error detected, continuing with offline mode");
-        setError("مشكلة في الاتصال. يتم المتابعة في وضع عدم الاتصال.");
-      } else {
-        setError("فشل في تحميل البيانات");
-      }
-    } finally {
-      setIsLoading(false);
+      setHasError(true);
+      setErrorMessage("حدث خطأ في تحميل البيانات");
+      setCourses([]);
+      setDietPlans([]);
+      setDataLoaded(true);
     }
   };
 
-  const loadExistingMember = async (id: string) => {
+  const loadMemberForEdit = async (memberId: string) => {
     try {
-      const memberData = await getSubscriberWithGroups(id);
-      if (memberData) {
-        // Load basic info
+      const member = await getMemberById(memberId);
+      if (member) {
         setFormData({
-          name: memberData.name,
-          age: memberData.age,
-          weight: memberData.weight,
-          height: memberData.height,
-          phone: memberData.phone,
-          notes: memberData.notes || "",
+          name: member.name,
+          age: member.age.toString(),
+          height: member.height.toString(),
+          weight: member.weight.toString(),
         });
 
-        // Convert groups to editable format
-        const courseGroupsData = memberData.course_groups.map((group) => ({
-          id: group.id,
-          title: group.title || "",
-          type: "course" as const,
-          selectedItems: group.items.map((item) => item.name),
-        }));
+        const validCourses = Array.isArray(member.courses)
+          ? member.courses
+          : [];
+        const validDietPlans = Array.isArray(member.dietPlans)
+          ? member.dietPlans
+          : [];
+        const validCourseGroups = Array.isArray(member.courseGroups)
+          ? member.courseGroups
+          : [];
+        const validDietPlanGroups = Array.isArray(member.dietPlanGroups)
+          ? member.dietPlanGroups
+          : [];
 
-        const dietGroupsData = memberData.diet_groups.map((group) => ({
-          id: group.id,
-          title: group.title || "",
-          type: "diet" as const,
-          selectedItems: group.items.map((item) => item.name),
-        }));
-
-        setCourseGroups(courseGroupsData);
-        setDietGroups(dietGroupsData);
+        setSelectedCourses(validCourses);
+        setSelectedDietPlans(validDietPlans);
+        setCourseGroups(validCourseGroups);
+        setDietPlanGroups(validDietPlanGroups);
       }
     } catch (error) {
-      console.error("Error loading existing member:", error);
-      setError("فشل في تحميل بيانات المشترك");
+      console.error("Error loading member for edit:", error);
     }
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = "الاسم م��لوب";
+    }
+
+    if (
+      !formData.age ||
+      parseInt(formData.age) <= 0 ||
+      parseInt(formData.age) > 100
+    ) {
+      newErrors.age = "يجب إدخال عمر صحيح (1-100)";
+    }
+
+    if (
+      !formData.height ||
+      parseInt(formData.height) <= 0 ||
+      parseInt(formData.height) > 250
+    ) {
+      newErrors.height = "يجب إدخال طول صحيح (1-250 سم)";
+    }
+
+    if (
+      !formData.weight ||
+      parseInt(formData.weight) <= 0 ||
+      parseInt(formData.weight) > 300
+    ) {
+      newErrors.weight = "يجب إدخال وزن صحيح (1-300 كيلو)";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim()) {
-      setError("اسم المشترك مطلوب");
+    if (!validateForm()) {
       return;
     }
 
+    setIsLoading(true);
+    setSaveSuccess(false);
+
     try {
-      setIsSaving(true);
-      setError(null);
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      let subscriberId = editId;
+      const existingMember = isEditing ? await getMemberById(editId!) : null;
 
-      if (isEditing && editId) {
-        // Update existing subscriber
-        await updateSubscriber(editId, formData);
+      // Calculate subscription dates
+      const currentDate = new Date();
+      const subscriptionEnd = new Date();
+      subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1); // Add one month
 
-        // Update groups - First delete existing groups, then create new ones
-        const existingMember = await getSubscriberWithGroups(editId);
-        if (existingMember) {
-          // Delete existing groups
-          const deletePromises = [
-            ...existingMember.course_groups.map((group) =>
-              deleteGroup(group.id),
-            ),
-            ...existingMember.diet_groups.map((group) => deleteGroup(group.id)),
-          ];
-          await Promise.all(deletePromises);
-        }
-      } else {
-        // Create new subscriber
-        subscriberId = await createSubscriber(formData);
-      }
+      const memberData: Member = {
+        id: isEditing ? editId! : Date.now().toString(),
+        name: formData.name.trim(),
+        phone: "",
+        age: parseInt(formData.age),
+        height: parseInt(formData.height),
+        weight: parseInt(formData.weight),
+        courses: selectedCourses, // Keep for backward compatibility
+        dietPlans: selectedDietPlans, // Keep for backward compatibility
+        courseGroups: courseGroups,
+        dietPlanGroups: dietPlanGroups,
+        subscriptionStart: existingMember?.subscriptionStart || currentDate,
+        subscriptionEnd: existingMember?.subscriptionEnd || subscriptionEnd,
+        createdAt: existingMember?.createdAt || new Date(),
+        updatedAt: new Date(),
+      };
 
-      if (!subscriberId) {
-        throw new Error("فشل في الحصول على معرف المشترك");
-      }
+      await saveSimpleMember(memberData);
+      setSaveSuccess(true);
 
-      // Create groups
-      const allGroups = [...courseGroups, ...dietGroups];
-      for (const group of allGroups) {
-        if (group.selectedItems.length > 0) {
-          await createGroup(subscriberId, {
-            title: group.title,
-            type: group.type,
-            items: group.selectedItems,
-          });
-        }
-      }
-
-      setSuccess(
-        isEditing ? "تم تحديث المشترك بنجاح" : "تم إضافة المشترك بنجاح",
-      );
-
-      // Wait a moment then redirect
       setTimeout(() => {
-        navigate("/dashboard/members");
+        navigate("/dashboard");
       }, 1500);
     } catch (error) {
       console.error("Error saving member:", error);
-
-      if (!isOnline) {
-        // Save for offline sync
-        await offlineManager.addPendingOperation({
-          type: isEditing ? "UPDATE" : "CREATE",
-          table: "subscribers",
-          data: { formData, courseGroups, dietGroups },
-          url: "https://ibluvphzaitnetwvvfzu.supabase.co/rest/v1/subscribers",
-          method: isEditing ? "PATCH" : "POST",
-          body: JSON.stringify(formData),
-        });
-
-        setSuccess("تم حفظ البيانات محلياً - ستتم المزامنة عند عودة الإنترنت");
-        setTimeout(() => navigate("/dashboard/members"), 1500);
-      } else {
-        setError(isEditing ? "فشل في تحديث المشترك" : "فشل في إضافة المشترك");
-      }
     } finally {
-      setIsSaving(false);
+      setIsLoading(false);
     }
   };
 
-  const addGroup = (
-    type: "course" | "diet",
-    title: string,
-    items: string[],
-  ) => {
-    const newGroup: GroupData = {
-      title,
-      type,
-      selectedItems: items,
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  // Course group functions
+  const addCourseGroup = () => {
+    if (newCourseGroup.selectedCourses.length === 0) {
+      return;
+    }
+
+    const group: CourseGroup = {
+      id: Date.now().toString(),
+      title: newCourseGroup.title.trim() || undefined,
+      courseIds: newCourseGroup.selectedCourses,
+      createdAt: new Date(),
     };
 
-    if (type === "course") {
-      setCourseGroups([...courseGroups, newGroup]);
-    } else {
-      setDietGroups([...dietGroups, newGroup]);
-    }
+    setCourseGroups([...courseGroups, group]);
+    setNewCourseGroup({ title: "", selectedCourses: [] });
   };
 
-  const updateGroup = (
-    index: number,
-    type: "course" | "diet",
-    updatedGroup: GroupData,
-  ) => {
-    if (type === "course") {
-      const updated = [...courseGroups];
-      updated[index] = updatedGroup;
-      setCourseGroups(updated);
-    } else {
-      const updated = [...dietGroups];
-      updated[index] = updatedGroup;
-      setDietGroups(updated);
-    }
-    setEditingGroup(null);
+  const removeCourseGroup = (groupId: string) => {
+    setCourseGroups(courseGroups.filter((group) => group.id !== groupId));
   };
 
-  const removeGroup = (index: number, type: "course" | "diet") => {
-    if (type === "course") {
-      setCourseGroups(courseGroups.filter((_, i) => i !== index));
-    } else {
-      setDietGroups(dietGroups.filter((_, i) => i !== index));
-    }
+  const toggleCourseForGroup = (courseId: string) => {
+    setNewCourseGroup((prev) => ({
+      ...prev,
+      selectedCourses: prev.selectedCourses.includes(courseId)
+        ? prev.selectedCourses.filter((id) => id !== courseId)
+        : [...prev.selectedCourses, courseId],
+    }));
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-16 w-16 border-4 border-orange-500 border-t-transparent mx-auto mb-6"></div>
-            <p className="text-gray-600">جاري تحميل البيانات...</p>
-          </div>
-        </div>
-      </div>
+  // Diet plan group functions
+  const addDietPlanGroup = () => {
+    if (newDietPlanGroup.selectedDietPlans.length === 0) {
+      return;
+    }
+
+    const group: DietPlanGroup = {
+      id: Date.now().toString(),
+      title: newDietPlanGroup.title.trim() || undefined,
+      dietPlanIds: newDietPlanGroup.selectedDietPlans,
+      createdAt: new Date(),
+    };
+
+    setDietPlanGroups([...dietPlanGroups, group]);
+    setNewDietPlanGroup({ title: "", selectedDietPlans: [] });
+  };
+
+  const removeDietPlanGroup = (groupId: string) => {
+    setDietPlanGroups(dietPlanGroups.filter((group) => group.id !== groupId));
+  };
+
+  const toggleDietPlanForGroup = (dietPlanId: string) => {
+    setNewDietPlanGroup((prev) => ({
+      ...prev,
+      selectedDietPlans: prev.selectedDietPlans.includes(dietPlanId)
+        ? prev.selectedDietPlans.filter((id) => id !== dietPlanId)
+        : [...prev.selectedDietPlans, dietPlanId],
+    }));
+  };
+
+  // Filtered data
+  const filteredCourses = React.useMemo(() => {
+    if (!Array.isArray(courses) || !dataLoaded) return [];
+    return courses.filter((course) =>
+      course?.name?.toLowerCase().includes(courseSearch.toLowerCase()),
     );
-  }
+  }, [courses, courseSearch, dataLoaded]);
 
-  if (needsSetup) {
-    return <DatabaseSetupWarning onRetry={loadData} />;
-  }
+  const filteredDietPlans = React.useMemo(() => {
+    if (!Array.isArray(dietPlans) || !dataLoaded) return [];
+    return dietPlans.filter((diet) =>
+      diet?.name?.toLowerCase().includes(dietSearch.toLowerCase()),
+    );
+  }, [dietPlans, dietSearch, dataLoaded]);
 
-  return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header with offline indicator */}
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-500 rounded-full">
-                <User className="h-8 w-8 text-white" />
+  // Error boundary
+  if (hasError) {
+    return (
+      <div className="space-y-6">
+        <Card className="max-w-md mx-auto">
+          <CardContent className="p-8 text-center">
+            <div className="space-y-4">
+              <div className="p-4 bg-red-100 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+                <AlertCircle className="h-8 w-8 text-red-600" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  {isEditing ? "تعديل المشترك" : "إضافة مشترك جديد"}
-                </h1>
-                <div className="flex items-center gap-2">
-                  <p className="text-gray-600">
-                    {isEditing
-                      ? "تعديل بيانات المشترك وخططه"
-                      : "إضافة مشترك جديد مع خططه التدريبية والغذائية"}
-                  </p>
-                  {!isOnline && (
-                    <div className="flex items-center gap-1 text-amber-600 text-sm">
-                      <WifiOff className="h-4 w-4" />
-                      <span>وضع عدم الاتصال</span>
-                    </div>
-                  )}
-                </div>
+                <h3 className="text-xl font-semibold text-gray-900">حدث خطأ</h3>
+                <p className="text-gray-600 mt-2">
+                  {errorMessage || "حدث خطأ غير متوقع"}
+                </p>
+                <Button
+                  onClick={() => {
+                    setHasError(false);
+                    setErrorMessage("");
+                    loadData();
+                  }}
+                  className="mt-4"
+                >
+                  إعادة المحاولة
+                </Button>
               </div>
             </div>
-            <Button
-              variant="outline"
-              onClick={() => navigate("/dashboard/members")}
-              className="text-gray-700 border-gray-300 hover:bg-gray-50"
-            >
-              <ArrowLeft className="w-5 h-5 ml-2" />
-              العودة للقائمة
-            </Button>
-          </div>
-
-          {/* Status Messages */}
-          {success && (
-            <Alert className="mb-6 border-green-200 bg-green-50">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-700 font-medium">
-                {success}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {error && (
-            <Alert className="mb-6 border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-700 font-medium">
-                {error}
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Personal Information */}
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <User className="h-5 w-5 text-orange-500" />
-                  المعلومات الشخصية
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">الاسم الكامل *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, name: e.target.value }))
-                    }
-                    placeholder="أدخل الاسم الكامل"
-                    required
-                    className="text-lg"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="age">العمر</Label>
-                    <Input
-                      id="age"
-                      type="number"
-                      value={formData.age}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          age: parseInt(e.target.value) || 0,
-                        }))
-                      }
-                      placeholder="العمر"
-                      min="10"
-                      max="100"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="weight">الوزن (كيلو)</Label>
-                    <Input
-                      id="weight"
-                      type="number"
-                      value={formData.weight}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          weight: parseInt(e.target.value) || 0,
-                        }))
-                      }
-                      placeholder="الوزن"
-                      min="30"
-                      max="300"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="height">الطول (سم)</Label>
-                    <Input
-                      id="height"
-                      type="number"
-                      value={formData.height}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          height: parseInt(e.target.value) || 0,
-                        }))
-                      }
-                      placeholder="الطول"
-                      min="100"
-                      max="250"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">رقم الهاتف</Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          phone: e.target.value,
-                        }))
-                      }
-                      placeholder="رقم الهاتف"
-                      dir="ltr"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="notes">الملاحظات</Label>
-                  <Textarea
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        notes: e.target.value,
-                      }))
-                    }
-                    placeholder="أي ملاحظات إضافية..."
-                    rows={4}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Course Groups */}
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <GraduationCap className="h-5 w-5 text-orange-500" />
-                    الكورسات ({courseGroups.length})
-                  </div>
-                  <AddGroupDialog
-                    type="course"
-                    availableItems={coursePoints.map((cp) => cp.name)}
-                    onAdd={(title, items) => addGroup("course", title, items)}
-                    trigger={
-                      <Button
-                        size="sm"
-                        className="bg-orange-500 hover:bg-orange-600"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    }
-                  />
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {courseGroups.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <GraduationCap className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                    <p>لا توجد مجموعات كور��ات</p>
-                    <p className="text-sm">اضغط + لإضافة مجموعة</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {courseGroups.map((group, index) => (
-                      <GroupCard
-                        key={index}
-                        group={group}
-                        index={index}
-                        type="course"
-                        availableItems={coursePoints.map((cp) => cp.name)}
-                        onUpdate={(updatedGroup) =>
-                          updateGroup(index, "course", updatedGroup)
-                        }
-                        onRemove={() => removeGroup(index, "course")}
-                      />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Diet Groups */}
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Apple className="h-5 w-5 text-green-500" />
-                    الأنظمة الغذائية ({dietGroups.length})
-                  </div>
-                  <AddGroupDialog
-                    type="diet"
-                    availableItems={dietItems.map((di) => di.name)}
-                    onAdd={(title, items) => addGroup("diet", title, items)}
-                    trigger={
-                      <Button
-                        size="sm"
-                        className="bg-green-500 hover:bg-green-600"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    }
-                  />
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {dietGroups.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Apple className="h-12 w-12 mx-auto mb-2 text-gray-300" />
-                    <p>لا توجد مجموعات غذائية</p>
-                    <p className="text-sm">اضغط + لإضافة مجموعة</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {dietGroups.map((group, index) => (
-                      <GroupCard
-                        key={index}
-                        group={group}
-                        index={index}
-                        type="diet"
-                        availableItems={dietItems.map((di) => di.name)}
-                        onUpdate={(updatedGroup) =>
-                          updateGroup(index, "diet", updatedGroup)
-                        }
-                        onRemove={() => removeGroup(index, "diet")}
-                      />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Submit Button */}
-          <div className="mt-8 flex justify-center">
-            <Button
-              type="submit"
-              disabled={isSaving}
-              size="lg"
-              className="bg-orange-500 hover:bg-orange-600 text-white px-8 py-3 text-lg"
-            >
-              {isSaving ? (
-                <>
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white ml-2"></div>
-                  {isEditing ? "جاري التحديث..." : "جاري الحفظ..."}
-                </>
-              ) : (
-                <>
-                  <Save className="w-5 h-5 ml-2" />
-                  {isEditing ? "تحديث المشترك" : "حفظ المشترك"}
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
+          </CardContent>
+        </Card>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-// Group Card Component
-interface GroupCardProps {
-  group: GroupData;
-  index: number;
-  type: "course" | "diet";
-  availableItems: string[];
-  onUpdate: (group: GroupData) => void;
-  onRemove: () => void;
-}
-
-function GroupCard({
-  group,
-  index,
-  type,
-  availableItems,
-  onUpdate,
-  onRemove,
-}: GroupCardProps) {
-  const [editing, setEditing] = useState(false);
-  const [editTitle, setEditTitle] = useState(group.title);
-  const [editItems, setEditItems] = useState<string[]>(group.selectedItems);
-
-  const handleSave = () => {
-    onUpdate({
-      ...group,
-      title: editTitle,
-      selectedItems: editItems,
-    });
-    setEditing(false);
-  };
-
-  const handleCancel = () => {
-    setEditTitle(group.title);
-    setEditItems(group.selectedItems);
-    setEditing(false);
-  };
-
-  const toggleItem = (item: string) => {
-    if (editItems.includes(item)) {
-      setEditItems(editItems.filter((i) => i !== item));
-    } else {
-      setEditItems([...editItems, item]);
-    }
-  };
-
-  if (editing) {
+  if (saveSuccess) {
     return (
-      <Card
-        className={`border-2 ${type === "course" ? "border-orange-200" : "border-green-200"}`}
-      >
-        <CardContent className="p-4">
-          <div className="space-y-3">
-            <Input
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              placeholder={`عنوان ${type === "course" ? "المجموعة" : "الوجبة"}`}
-              className="font-medium"
-            />
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                {type === "course" ? "التمارين" : "العناصر الغذائية"}:
-              </Label>
-              <div className="max-h-32 overflow-y-auto border rounded-md p-2">
-                {availableItems.map((item) => (
-                  <label
-                    key={item}
-                    className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-2"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={editItems.includes(item)}
-                      onChange={() => toggleItem(item)}
-                      className="rounded"
-                    />
-                    <span className="text-sm">{item}</span>
-                  </label>
-                ))}
+      <div className="space-y-6">
+        <Card className="max-w-md mx-auto">
+          <CardContent className="p-8 text-center">
+            <div className="space-y-4">
+              <div className="p-4 bg-green-100 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+                <Check className="h-8 w-8 text-green-600" />
               </div>
-              <p className="text-xs text-gray-500">
-                تم اختيار {editItems.length} عنصر
-              </p>
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900">
+                  {isEditing
+                    ? "تم تحديث البيانات بنجاح!"
+                    : "تم إضافة العضو بنجاح!"}
+                </h3>
+                <p className="text-gray-600 mt-2">
+                  سيتم تحويلك إلى صفحة الأعضاء...
+                </p>
+              </div>
             </div>
-
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                onClick={handleSave}
-                className="bg-green-500 hover:bg-green-600"
-              >
-                <Save className="w-4 h-4 ml-1" />
-                حفظ
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleCancel}>
-                <X className="w-4 h-4 ml-1" />
-                إلغاء
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Card
-      className={`${type === "course" ? "bg-orange-50 border-orange-200" : "bg-green-50 border-green-200"}`}
-    >
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <h4
-            className={`font-semibold ${type === "course" ? "text-orange-800" : "text-green-800"}`}
-          >
-            {group.title ||
-              `${type === "course" ? "مجموعة تمارين" : "مجموعة غذائية"} ${index + 1}`}
-          </h4>
-          <div className="flex gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setEditing(true)}
-              className="h-6 w-6 p-0"
-            >
-              <Edit className="w-3 h-3" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onRemove}
-              className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-r from-orange-500 to-amber-500 rounded-lg">
+            <UserPlus className="h-6 w-6 text-white" />
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-1">
-          {group.selectedItems.map((item, itemIndex) => (
-            <Badge
-              key={itemIndex}
-              variant="secondary"
-              className={`text-xs ${type === "course" ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}
-            >
-              {item}
-            </Badge>
-          ))}
-        </div>
-
-        {group.selectedItems.length === 0 && (
-          <p className="text-gray-500 text-sm italic">لا توجد عناصر مختارة</p>
-        )}
-
-        <p className="text-xs text-gray-500 mt-2">
-          {group.selectedItems.length} عنصر
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
-// Add Group Dialog Component
-interface AddGroupDialogProps {
-  type: "course" | "diet";
-  availableItems: string[];
-  onAdd: (title: string, items: string[]) => void;
-  trigger: React.ReactNode;
-}
-
-function AddGroupDialog({
-  type,
-  availableItems,
-  onAdd,
-  trigger,
-}: AddGroupDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
-
-  const handleAdd = () => {
-    if (selectedItems.length > 0) {
-      onAdd(title, selectedItems);
-      setTitle("");
-      setSelectedItems([]);
-      setOpen(false);
-    }
-  };
-
-  const toggleItem = (item: string) => {
-    if (selectedItems.includes(item)) {
-      setSelectedItems(selectedItems.filter((i) => i !== item));
-    } else {
-      setSelectedItems([...selectedItems, item]);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            إضافة {type === "course" ? "مجموعة تمارين" : "مجموعة غذائية"}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="group-title">العنوان (اختياري)</Label>
-            <Input
-              id="group-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={`مثال: ${type === "course" ? "اليوم الأول، تمارين الصدر" : "الفطور، وجبة ما بعد التمرين"}`}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>
-              {type === "course" ? "اختر التمارين" : "اختر العناصر الغذائية"}:
-            </Label>
-            <div className="max-h-60 overflow-y-auto border rounded-md p-2">
-              {availableItems.map((item) => (
-                <label
-                  key={item}
-                  className="flex items-center gap-2 py-2 cursor-pointer hover:bg-gray-50 rounded px-2"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedItems.includes(item)}
-                    onChange={() => toggleItem(item)}
-                    className="rounded"
-                  />
-                  <span className="text-sm">{item}</span>
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-gray-500">
-              تم اختيار {selectedItems.length} عنصر
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isEditing ? "تعديل بيانات العضو" : "إضافة مشترك جديد"}
+            </h1>
+            <p className="text-gray-600">
+              {isEditing
+                ? "تحديث بيانات العضو الحالي"
+                : "إضافة عضو جديد مع مجموعات مخصصة"}
             </p>
           </div>
-
-          <div className="flex gap-2">
-            <Button
-              onClick={handleAdd}
-              disabled={selectedItems.length === 0}
-              className={`flex-1 ${type === "course" ? "bg-orange-500 hover:bg-orange-600" : "bg-green-500 hover:bg-green-600"}`}
-            >
-              <Plus className="w-4 h-4 ml-2" />
-              إضافة المجموعة
-            </Button>
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              إلغاء
-            </Button>
-          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        <Button
+          variant="outline"
+          onClick={() => navigate("/dashboard")}
+          className="flex items-center gap-2"
+        >
+          <ArrowRight className="h-4 w-4" />
+          العودة للأعضاء
+        </Button>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Personal Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <User className="h-5 w-5 text-orange-600" />
+              المعلومات الشخصية
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name" className="text-right block">
+                  الاسم الكامل *
+                </Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange("name", e.target.value)}
+                  placeholder="أدخل الاسم الكامل"
+                  className={cn(
+                    "text-right",
+                    errors.name && "border-red-500 focus:border-red-500",
+                  )}
+                />
+                {errors.name && (
+                  <p className="text-sm text-red-600 text-right">
+                    {errors.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="age" className="text-right block">
+                  العمر (سنة) *
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="age"
+                    type="number"
+                    value={formData.age}
+                    onChange={(e) => handleInputChange("age", e.target.value)}
+                    placeholder="العمر"
+                    min="1"
+                    max="100"
+                    className={cn(
+                      "text-right",
+                      errors.age && "border-red-500 focus:border-red-500",
+                    )}
+                  />
+                  <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                </div>
+                {errors.age && (
+                  <p className="text-sm text-red-600 text-right">
+                    {errors.age}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="height" className="text-right block">
+                  الطول (سم) *
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="height"
+                    type="number"
+                    value={formData.height}
+                    onChange={(e) =>
+                      handleInputChange("height", e.target.value)
+                    }
+                    placeholder="الطول بالسنتيمتر"
+                    min="100"
+                    max="250"
+                    className={cn(
+                      "text-right",
+                      errors.height && "border-red-500 focus:border-red-500",
+                    )}
+                  />
+                  <Ruler className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                </div>
+                {errors.height && (
+                  <p className="text-sm text-red-600 text-right">
+                    {errors.height}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="weight" className="text-right block">
+                  الوزن (كيلو) *
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="weight"
+                    type="number"
+                    value={formData.weight}
+                    onChange={(e) =>
+                      handleInputChange("weight", e.target.value)
+                    }
+                    placeholder="الوزن بالكيلوجرام"
+                    min="1"
+                    max="300"
+                    className={cn(
+                      "text-right",
+                      errors.weight && "border-red-500 focus:border-red-500",
+                    )}
+                  />
+                  <Weight className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                </div>
+                {errors.weight && (
+                  <p className="text-sm text-red-600 text-right">
+                    {errors.weight}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Course Groups */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <GraduationCap className="h-5 w-5 text-blue-600" />
+              مجموعات الكورسات التدريبية
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Add New Course Group */}
+            <div className="border rounded-lg p-4 bg-blue-50">
+              <h4 className="font-semibold text-blue-800 mb-4">
+                إضافة مجموعة كورسات جديدة
+              </h4>
+
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-right block mb-2">
+                    عنوان المجموعة (اختياري)
+                  </Label>
+                  <Input
+                    value={newCourseGroup.title}
+                    onChange={(e) =>
+                      setNewCourseGroup((prev) => ({
+                        ...prev,
+                        title: e.target.value,
+                      }))
+                    }
+                    placeholder="مثال: اليوم الأول - الجزء العلوي"
+                    className="text-right"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-right block mb-2">
+                    اختيار الكورسات للمجموعة
+                  </Label>
+                  {!dataLoaded ? (
+                    <Button variant="outline" disabled className="w-full">
+                      جاري التحميل...
+                    </Button>
+                  ) : (
+                    <Popover open={coursesOpen} onOpenChange={setCoursesOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between text-right"
+                        >
+                          <ChevronsUpDown className="ml-2 h-4 w-4" />
+                          {newCourseGroup.selectedCourses.length > 0
+                            ? `تم اختيار ${newCourseGroup.selectedCourses.length} كورس`
+                            : "اختر الكورسات..."}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="البحث في الكورسات..."
+                            value={courseSearch}
+                            onValueChange={setCourseSearch}
+                          />
+                          <CommandList>
+                            <CommandEmpty>لا توجد كورسات متطابقة</CommandEmpty>
+                            <CommandGroup>
+                              {filteredCourses.map((course) => (
+                                <CommandItem
+                                  key={course.id}
+                                  value={course.name}
+                                  onSelect={() =>
+                                    toggleCourseForGroup(course.id)
+                                  }
+                                  className="text-right cursor-pointer"
+                                >
+                                  <Checkbox
+                                    checked={newCourseGroup.selectedCourses.includes(
+                                      course.id,
+                                    )}
+                                    readOnly
+                                    className="mr-2"
+                                  />
+                                  {course.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+
+                {/* Selected courses for new group */}
+                {newCourseGroup.selectedCourses.length > 0 && (
+                  <div>
+                    <Label className="text-right block mb-2">
+                      الكورسات المختارة:
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {newCourseGroup.selectedCourses.map((courseId) => {
+                        const course = courses.find((c) => c.id === courseId);
+                        return (
+                          <Badge
+                            key={courseId}
+                            variant="secondary"
+                            className="bg-blue-100"
+                          >
+                            {course?.name}
+                            <button
+                              type="button"
+                              onClick={() => toggleCourseForGroup(courseId)}
+                              className="ml-1"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  type="button"
+                  onClick={addCourseGroup}
+                  disabled={newCourseGroup.selectedCourses.length === 0}
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  إضافة المجموعة
+                </Button>
+              </div>
+            </div>
+
+            {/* Existing Course Groups */}
+            {courseGroups.length > 0 && (
+              <div>
+                <Label className="text-right block mb-4 text-lg font-semibold">
+                  المجموعات المضافة:
+                </Label>
+                <div className="space-y-3">
+                  {courseGroups.map((group, index) => (
+                    <div
+                      key={group.id}
+                      className="border rounded-lg p-4 bg-white"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeCourseGroup(group.id)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <div className="text-right flex-1">
+                          {group.title ? (
+                            <h5 className="font-semibold text-blue-800">
+                              {group.title}
+                            </h5>
+                          ) : (
+                            <h5 className="font-semibold text-gray-600">
+                              مجموعة {index + 1}
+                            </h5>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {group.courseIds.map((courseId) => {
+                          const course = courses.find((c) => c.id === courseId);
+                          return (
+                            <Badge
+                              key={courseId}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {course?.name}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Diet Plan Groups */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Apple className="h-5 w-5 text-green-600" />
+              مجموعات الأنظمة الغذائية
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Add New Diet Plan Group */}
+            <div className="border rounded-lg p-4 bg-green-50">
+              <h4 className="font-semibold text-green-800 mb-4">
+                إضافة مجموعة أنظمة غذائية جديدة
+              </h4>
+
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-right block mb-2">
+                    عنوان المجموعة (اختياري)
+                  </Label>
+                  <Input
+                    value={newDietPlanGroup.title}
+                    onChange={(e) =>
+                      setNewDietPlanGroup((prev) => ({
+                        ...prev,
+                        title: e.target.value,
+                      }))
+                    }
+                    placeholder="مثال: البرنامج الغذائي اليومي"
+                    className="text-right"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-right block mb-2">
+                    اختيار الأنظمة الغذائية للمجموعة
+                  </Label>
+                  {!dataLoaded ? (
+                    <Button variant="outline" disabled className="w-full">
+                      جاري التحميل...
+                    </Button>
+                  ) : (
+                    <Popover
+                      open={dietPlansOpen}
+                      onOpenChange={setDietPlansOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-between text-right"
+                        >
+                          <ChevronsUpDown className="ml-2 h-4 w-4" />
+                          {newDietPlanGroup.selectedDietPlans.length > 0
+                            ? `تم اختيار ${newDietPlanGroup.selectedDietPlans.length} نظام`
+                            : "اختر الأنظمة الغذائية..."}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0">
+                        <Command shouldFilter={false}>
+                          <CommandInput
+                            placeholder="البحث في الأنظمة الغذائية..."
+                            value={dietSearch}
+                            onValueChange={setDietSearch}
+                          />
+                          <CommandList>
+                            <CommandEmpty>
+                              لا توجد أنظمة غذائية متطابقة
+                            </CommandEmpty>
+                            <CommandGroup>
+                              {filteredDietPlans.map((diet) => (
+                                <CommandItem
+                                  key={diet.id}
+                                  value={diet.name}
+                                  onSelect={() =>
+                                    toggleDietPlanForGroup(diet.id)
+                                  }
+                                  className="text-right cursor-pointer"
+                                >
+                                  <Checkbox
+                                    checked={newDietPlanGroup.selectedDietPlans.includes(
+                                      diet.id,
+                                    )}
+                                    readOnly
+                                    className="mr-2"
+                                  />
+                                  {diet.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
+
+                {/* Selected diet plans for new group */}
+                {newDietPlanGroup.selectedDietPlans.length > 0 && (
+                  <div>
+                    <Label className="text-right block mb-2">
+                      الأنظمة المختارة:
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {newDietPlanGroup.selectedDietPlans.map((dietId) => {
+                        const diet = dietPlans.find((d) => d.id === dietId);
+                        return (
+                          <Badge
+                            key={dietId}
+                            variant="secondary"
+                            className="bg-green-100"
+                          >
+                            {diet?.name}
+                            <button
+                              type="button"
+                              onClick={() => toggleDietPlanForGroup(dietId)}
+                              className="ml-1"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  type="button"
+                  onClick={addDietPlanGroup}
+                  disabled={newDietPlanGroup.selectedDietPlans.length === 0}
+                  className="w-full bg-green-600 hover:bg-green-700"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  إضافة المجموعة
+                </Button>
+              </div>
+            </div>
+
+            {/* Existing Diet Plan Groups */}
+            {dietPlanGroups.length > 0 && (
+              <div>
+                <Label className="text-right block mb-4 text-lg font-semibold">
+                  المجموعات المضافة:
+                </Label>
+                <div className="space-y-3">
+                  {dietPlanGroups.map((group, index) => (
+                    <div
+                      key={group.id}
+                      className="border rounded-lg p-4 bg-white"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeDietPlanGroup(group.id)}
+                          className="text-red-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <div className="text-right flex-1">
+                          {group.title ? (
+                            <h5 className="font-semibold text-green-800">
+                              {group.title}
+                            </h5>
+                          ) : (
+                            <h5 className="font-semibold text-gray-600">
+                              مجموعة {index + 1}
+                            </h5>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {group.dietPlanIds.map((dietId) => {
+                          const diet = dietPlans.find((d) => d.id === dietId);
+                          return (
+                            <Badge
+                              key={dietId}
+                              variant="outline"
+                              className="text-xs"
+                            >
+                              {diet?.name}
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Submit Button */}
+        <div className="flex gap-4">
+          <Button
+            type="submit"
+            disabled={isLoading}
+            className="flex-1 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg h-12"
+          >
+            {isLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                {isEditing ? "جاري التحديث..." : "جاري الحفظ..."}
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4 mr-2" />
+                {isEditing ? "تحديث البيانات" : "حفظ العضو"}
+              </>
+            )}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate("/dashboard")}
+            className="px-8"
+          >
+            إلغاء
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }

@@ -31,9 +31,15 @@ class GymDatabase {
     }
 
     return new Promise((resolve, reject) => {
+      // Add timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        reject(new Error("Database initialization timeout"));
+      }, 10000); // 10 seconds timeout
+
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = () => {
+        clearTimeout(timeout);
         reject(
           new Error(`فشل في فتح قاعدة البيانات: ${request.error?.message}`),
         );
@@ -100,6 +106,7 @@ class GymDatabase {
       };
 
       request.onsuccess = () => {
+        clearTimeout(timeout);
         this.db = request.result;
         this.isInitialized = true;
         resolve();
@@ -178,6 +185,11 @@ class GymDatabase {
   }
 
   async updateMember(id: string, updates: Partial<Member>): Promise<void> {
+    // Validate id parameter
+    if (!id || typeof id !== "string") {
+      throw new Error(`Invalid member ID provided for update: ${id}`);
+    }
+
     return this.executeTransaction(
       STORES.MEMBERS,
       "readwrite",
@@ -621,50 +633,10 @@ class GymDatabase {
     }
   }
 
-  // Initialize sample data
+  // Initialize sample data (removed - no demo data)
   async initializeSampleData(): Promise<void> {
-    const [membersCount, coursesCount, dietPlansCount] = await Promise.all([
-      this.getMembers().then((members) => members.length),
-      this.getCourses().then((courses) => courses.length),
-      this.getDietPlans().then((dietPlans) => dietPlans.length),
-    ]);
-
-    // Only add sample data if tables are empty
-    if (coursesCount === 0) {
-      const sampleCourses: Course[] = [
-        {
-          id: "1",
-          name: "تمارين كمال الأجسام المبتدئين",
-          createdAt: new Date(),
-        },
-        { id: "2", name: "تمارين القوة والتحمل", createdAt: new Date() },
-        { id: "3", name: "تمارين اللياقة البدنية", createdAt: new Date() },
-        { id: "4", name: "تمارين اليوغا والإطالة", createdAt: new Date() },
-        { id: "5", name: "تمارين الكارديو المكثفة", createdAt: new Date() },
-      ];
-
-      for (const course of sampleCourses) {
-        await this.saveCourse(course);
-      }
-    }
-
-    if (dietPlansCount === 0) {
-      const sampleDietPlans: DietPlan[] = [
-        {
-          id: "1",
-          name: "نظام غذائي لزيادة الكتلة العضلية",
-          createdAt: new Date(),
-        },
-        { id: "2", name: "نظام غذائي لحرق الدهون", createdAt: new Date() },
-        { id: "3", name: "نظام غذائي متوازن", createdAt: new Date() },
-        { id: "4", name: "نظام غذائي نباتي", createdAt: new Date() },
-        { id: "5", name: "نظام غذائي للرياضيين", createdAt: new Date() },
-      ];
-
-      for (const dietPlan of sampleDietPlans) {
-        await this.saveDietPlan(dietPlan);
-      }
-    }
+    // No demo data will be added automatically
+    console.log("Database initialized - ready for real data");
   }
 }
 

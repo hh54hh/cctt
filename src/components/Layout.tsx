@@ -1,304 +1,240 @@
-import { ReactNode, useEffect, useState } from "react";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   Users,
-  Plus,
+  UserPlus,
   GraduationCap,
   Apple,
-  ShoppingCart,
+  Package,
+  Activity,
   LogOut,
+  Dumbbell,
   Menu,
   X,
-  Wifi,
-  WifiOff,
+  Settings,
+  Download,
+  FileText,
 } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { logout } from "@/lib/auth";
-import { offlineManager } from "@/lib/offline-manager";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { logout, GYM_NAME, getLoginDuration } from "@/lib/auth-new";
+import {
+  getSubscribers,
+  getCoursePoints,
+  getDietItems,
+  getProducts,
+  getSales,
+} from "@/lib/database-new";
+import { useState } from "react";
+import { cn } from "@/lib/utils";
 
-interface LayoutProps {
-  children: ReactNode;
-}
+const navigation = [
+  { name: "المشتركين", href: "/dashboard/subscribers", icon: Users },
+  { name: "إضافة مشترك", href: "/dashboard/add-subscriber", icon: UserPlus },
+  { name: "إدارة التمارين", href: "/dashboard/courses", icon: GraduationCap },
+  {
+    name: "إدارة الأنظمة الغذائية",
+    href: "/dashboard/diet-plans",
+    icon: Apple,
+  },
+  { name: "المخزون", href: "/dashboard/inventory", icon: Package },
+  { name: "الإعدادات", href: "/dashboard/settings", icon: Settings },
+  { name: "فحص النظام", href: "/dashboard/diagnostics", icon: Activity },
+];
 
-export default function Layout({ children }: LayoutProps) {
-  const location = useLocation();
+export default function Layout() {
   const navigate = useNavigate();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [pendingOps, setPendingOps] = useState(0);
-
-  // Function to actually test internet connectivity
-  const testActualConnectivity = async (): Promise<boolean> => {
-    if (!navigator.onLine) {
-      return false;
-    }
-
-    try {
-      // Test with a small request to check actual internet connectivity
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-      const response = await fetch("https://httpbin.org/get", {
-        method: "HEAD",
-        mode: "no-cors",
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-      return true;
-    } catch (error) {
-      console.log("Connectivity test failed:", error);
-      return false;
-    }
-  };
-
-  useEffect(() => {
-    const handleOnline = async () => {
-      // Double-check with actual connectivity test
-      const actuallyOnline = await testActualConnectivity();
-      setIsOnline(actuallyOnline);
-
-      if (actuallyOnline) {
-        offlineManager.syncPendingOperations();
-      }
-    };
-
-    const handleOffline = () => setIsOnline(false);
-
-    const updatePendingOps = async () => {
-      const ops = await offlineManager.getPendingOperations();
-      setPendingOps(ops.length);
-    };
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    window.addEventListener("dataRefreshNeeded", updatePendingOps);
-
-    // Initial connectivity check
-    const initialConnectivityCheck = async () => {
-      const actuallyOnline = await testActualConnectivity();
-      setIsOnline(actuallyOnline);
-    };
-
-    initialConnectivityCheck();
-
-    // Check pending operations periodically
-    updatePendingOps();
-    const pendingOpsInterval = setInterval(updatePendingOps, 30000); // Every 30 seconds
-
-    // Periodic connectivity check (every 2 minutes when navigator says we're online)
-    const connectivityInterval = setInterval(async () => {
-      if (navigator.onLine) {
-        const actuallyOnline = await testActualConnectivity();
-        setIsOnline(actuallyOnline);
-      }
-    }, 120000); // Every 2 minutes
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-      window.removeEventListener("dataRefreshNeeded", updatePendingOps);
-      clearInterval(pendingOpsInterval);
-      clearInterval(connectivityInterval);
-    };
-  }, []);
+  const location = useLocation();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  const navigation = [
-    {
-      name: "المشتركين",
-      href: "/dashboard/members",
-      icon: Users,
-      current: location.pathname === "/dashboard/members",
-    },
-    {
-      name: "إضافة مشترك",
-      href: "/dashboard/add-member",
-      icon: Plus,
-      current: location.pathname === "/dashboard/add-member",
-    },
-    {
-      name: "الكورسات",
-      href: "/dashboard/courses",
-      icon: GraduationCap,
-      current: location.pathname === "/dashboard/courses",
-    },
-    {
-      name: "الأنظمة الغذائية",
-      href: "/dashboard/diet-plans",
-      icon: Apple,
-      current: location.pathname === "/dashboard/diet-plans",
-    },
-    {
-      name: "المبيعات",
-      href: "/dashboard/inventory",
-      icon: ShoppingCart,
-      current: location.pathname === "/dashboard/inventory",
-    },
-  ];
+  const isActive = (href: string) => {
+    if (href === "/dashboard/subscribers") {
+      return (
+        location.pathname === "/dashboard" ||
+        location.pathname === "/dashboard/subscribers"
+      );
+    }
+    return location.pathname === href;
+  };
+
+  const handleBackupDownload = async () => {
+    try {
+      const subscribers = await getSubscribers();
+      const coursePoints = await getCoursePoints();
+      const dietItems = await getDietItems();
+      const products = await getProducts();
+      const sales = await getSales();
+
+      const backup = {
+        timestamp: new Date().toISOString(),
+        gym_name: GYM_NAME,
+        version: "2.0",
+        data: {
+          subscribers,
+          coursePoints,
+          dietItems,
+          products,
+          sales,
+        },
+      };
+
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${GYM_NAME}-backup-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error creating backup:", error);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Online/Offline Status Bar */}
-      {!isOnline && (
+    <div
+      className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50"
+      dir="rtl"
+    >
+      {/* Mobile menu overlay */}
+      {isMobileMenuOpen && (
         <div
-          className="bg-amber-500 text-white text-center py-2 px-4 text-sm font-medium"
-          dir="rtl"
-        >
-          <div className="flex items-center justify-center gap-2">
-            <WifiOff className="h-4 w-4" />
-            <span>وضع عدم الاتصال - البيانات محفوظة محلياً</span>
-            {pendingOps > 0 && (
-              <span className="bg-amber-600 px-2 py-1 rounded-full text-xs">
-                {pendingOps} عملية معلقة
-              </span>
-            )}
-          </div>
-        </div>
+          className="fixed inset-0 z-50 bg-black/50 lg:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
       )}
 
-      {isOnline && pendingOps > 0 && (
-        <div
-          className="bg-blue-500 text-white text-center py-2 px-4 text-sm font-medium"
-          dir="rtl"
-        >
-          <div className="flex items-center justify-center gap-2">
-            <Wifi className="h-4 w-4 animate-pulse" />
-            <span>جاري مزامنة {pendingOps} عملية معلقة...</span>
-          </div>
-        </div>
-      )}
-
-      <header className="bg-white shadow-lg border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo and Title */}
+      {/* Sidebar */}
+      <div
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 w-64 bg-white/90 backdrop-blur-sm shadow-xl border-l border-orange-200 transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          isMobileMenuOpen
+            ? "translate-x-0"
+            : "translate-x-full lg:translate-x-0",
+        )}
+      >
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-orange-200">
             <div className="flex items-center gap-3">
-              <img
-                src="https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=80"
-                alt="شعار صالة حسام"
-                className="w-12 h-12 rounded-full object-cover border-2 border-orange-400 shadow-md"
-              />
+              <div className="p-2 bg-gradient-to-r from-orange-500 to-amber-500 rounded-lg text-white">
+                <Dumbbell className="h-6 w-6" />
+              </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">صالة حسام</h1>
-                <p className="text-sm text-gray-600">لكمال الأجسام والرشاقة</p>
+                <h1 className="text-lg font-bold text-gray-900">{GYM_NAME}</h1>
+                <p className="text-xs text-gray-600">نظام إدارة الصالة</p>
               </div>
             </div>
-
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-2">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link key={item.name} to={item.href}>
-                    <Button
-                      variant={item.current ? "default" : "ghost"}
-                      className={`flex items-center gap-2 ${
-                        item.current
-                          ? "bg-orange-500 text-white hover:bg-orange-600"
-                          : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span>{item.name}</span>
-                    </Button>
-                  </Link>
-                );
-              })}
-              <Button
-                variant="outline"
-                onClick={handleLogout}
-                className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 ml-2"
-              >
-                <LogOut className="w-4 h-4 ml-2" />
-                تسجيل الخروج
-              </Button>
-            </nav>
-
-            {/* Mobile menu button */}
-            <div className="md:hidden">
-              <Button
-                variant="ghost"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="text-gray-700"
-              >
-                {mobileMenuOpen ? (
-                  <X className="w-6 h-6" />
-                ) : (
-                  <Menu className="w-6 h-6" />
-                )}
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="lg:hidden"
+            >
+              <X className="h-5 w-5" />
+            </Button>
           </div>
 
-          {/* Mobile Navigation */}
-          {mobileMenuOpen && (
-            <div className="md:hidden border-t border-gray-200 py-4" dir="rtl">
-              <div className="space-y-2">
-                {navigation.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.name}
-                      to={item.href}
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      <Button
-                        variant={item.current ? "default" : "ghost"}
-                        className={`w-full justify-start flex items-center gap-3 ${
-                          item.current
-                            ? "bg-orange-500 text-white"
-                            : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
-                        }`}
-                      >
-                        <Icon className="w-5 h-5" />
-                        <span>{item.name}</span>
-                      </Button>
-                    </Link>
-                  );
-                })}
+          {/* Navigation */}
+          <nav className="flex-1 p-6 space-y-2">
+            {navigation.map((item) => {
+              const Icon = item.icon;
+              return (
                 <Button
-                  variant="outline"
+                  key={item.name}
+                  variant={isActive(item.href) ? "default" : "ghost"}
+                  className={cn(
+                    "w-full justify-start gap-3 h-12 text-right",
+                    isActive(item.href)
+                      ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md"
+                      : "text-gray-700 hover:bg-orange-100",
+                  )}
                   onClick={() => {
-                    handleLogout();
-                    setMobileMenuOpen(false);
+                    navigate(item.href);
+                    setIsMobileMenuOpen(false);
                   }}
-                  className="w-full justify-start text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 mt-4"
                 >
-                  <LogOut className="w-5 h-5 ml-2" />
-                  تسجيل الخروج
+                  <Icon className="h-5 w-5" />
+                  {item.name}
                 </Button>
-              </div>
+              );
+            })}
+          </nav>
+
+          {/* Footer */}
+          <div className="p-6 border-t border-orange-200 space-y-4">
+            {/* Session Info */}
+            <div className="text-center text-sm text-gray-600">
+              <p>مدة الجلسة: {getLoginDuration()}</p>
             </div>
-          )}
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="flex-1">{children}</main>
-
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-4">
-        <div className="max-w-7xl mx-auto px-6 text-center">
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-            <img
-              src="https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=32"
-              alt="شعار صالة حسام"
-              className="w-6 h-6 rounded-full object-cover"
-            />
-            <span>صالة حسام لكمال الأجسام والرشاقة © 2025</span>
-            {!isOnline && (
-              <span className="text-amber-600 font-medium">
-                • وضع عدم الاتصال
-              </span>
-            )}
+            {/* Actions */}
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="flex-1">
+                    <Settings className="h-4 w-4 ml-1" />
+                    أدوات
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={handleBackupDownload}>
+                    <Download className="h-4 w-4 ml-2" />
+                    تحميل نسخة احتياطية
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => window.print()}>
+                    <FileText className="h-4 w-4 ml-2" />
+                    طباعة الصفحة
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="text-red-600"
+                  >
+                    <LogOut className="h-4 w-4 ml-2" />
+                    تسجيل الخروج
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
-      </footer>
+      </div>
+
+      {/* Main content */}
+      <div className="lg:pr-64">
+        {/* Mobile header */}
+        <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-sm border-b border-orange-200 lg:hidden">
+          <div className="flex items-center justify-between p-4">
+            <h1 className="text-lg font-semibold text-gray-900">{GYM_NAME}</h1>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-auto bg-gray-50 p-6">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

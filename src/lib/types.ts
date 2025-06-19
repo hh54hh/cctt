@@ -19,6 +19,7 @@ export interface Member {
   age: number;
   height: number; // in cm
   weight: number; // in kg
+  gender?: "male" | "female"; // Optional gender field for better nutrition calculations
   courses: string[]; // Keep for backward compatibility
   dietPlans: string[]; // Keep for backward compatibility
   courseGroups: CourseGroup[]; // New grouped courses
@@ -59,6 +60,7 @@ export interface Sale {
   unitPrice: number;
   totalPrice: number;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface AuthState {
