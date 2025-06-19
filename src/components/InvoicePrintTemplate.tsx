@@ -18,7 +18,6 @@ export const InvoicePrintTemplate: React.FC<InvoicePrintTemplateProps> = ({
     unitPrice: 0,
     totalPrice: 0,
     createdAt: new Date(),
-    updatedAt: new Date(),
     ...sale,
   };
 

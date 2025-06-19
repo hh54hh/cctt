@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -11,17 +12,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -34,260 +31,445 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Package,
   Plus,
-  Search,
-  Edit,
   Trash2,
+  Search,
   Save,
-  X,
-  AlertCircle,
-  CheckCircle,
-  Calendar,
   ShoppingCart,
   DollarSign,
   TrendingUp,
-  TrendingDown,
+  Archive,
   Printer,
+  Edit,
+  AlertTriangle,
 } from "lucide-react";
+import { Product, Sale } from "@/lib/types";
 import {
   getProducts,
-  getSales,
   saveProduct,
-  updateProduct,
   deleteProduct,
+  updateProductQuantity,
+  getSales,
   saveSale,
   deleteSale,
-  searchProducts,
-  searchSales,
-} from "@/lib/database-offline";
-import { Product, Sale, ProductForm, SaleForm } from "@/lib/types-new";
-import { format } from "date-fns";
-import { ar } from "date-fns/locale";
+  updateSale,
+} from "@/lib/storage-new";
+import { cn } from "@/lib/utils";
+import { InvoicePrintTemplate } from "@/components/InvoicePrintTemplate";
 
 export default function Inventory() {
-  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [salesSearchTerm, setSalesSearchTerm] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [saleSuccess, setSaleSuccess] = useState<Sale | null>(null);
 
-  // Product modal state
-  const [addProductModalOpen, setAddProductModalOpen] = useState(false);
-  const [editProductModalOpen, setEditProductModalOpen] = useState(false);
-  const [deleteProductDialogOpen, setDeleteProductDialogOpen] = useState(false);
-
-  // Sale modal state
-  const [addSaleModalOpen, setAddSaleModalOpen] = useState(false);
-  const [deleteSaleDialogOpen, setDeleteSaleDialogOpen] = useState(false);
-  const [printConfirmDialogOpen, setPrintConfirmDialogOpen] = useState(false);
-  const [saleForPrint, setSaleForPrint] = useState<Sale | null>(null);
-
-  // Form state
-  const [productFormData, setProductFormData] = useState<ProductForm>({
+  // Product form state
+  const [productForm, setProductForm] = useState({
     name: "",
     quantity: "",
     price: "",
-    description: "",
-    category: "",
   });
 
-  const [saleFormData, setSaleFormData] = useState<SaleForm>({
-    buyer_name: "",
-    product_id: "",
+  // Sale form state
+  const [saleForm, setSaleForm] = useState({
+    buyerName: "",
+    productId: "",
     quantity: "",
-    notes: "",
   });
 
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  // Sales management states
+  const [salesSearchTerm, setSalesSearchTerm] = useState("");
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [editSaleDialogOpen, setEditSaleDialogOpen] = useState(false);
+  const [deleteSaleDialogOpen, setDeleteSaleDialogOpen] = useState(false);
   const [saleToDelete, setSaleToDelete] = useState<Sale | null>(null);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [isSaving, setIsSaving] = useState(false);
 
-  const categories = [
-    "مكملات",
-    "مشروبات",
-    "أدوات",
-    "ملابس",
-    "إكسسوارات",
-    "أخرى",
-  ];
+  // Edit product states
+  const [editProductDialogOpen, setEditProductDialogOpen] = useState(false);
+  const [productToEdit, setProductToEdit] = useState<Product | null>(null);
+  const [editProductForm, setEditProductForm] = useState({
+    name: "",
+    quantity: "",
+    price: "",
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadData();
   }, []);
 
-  useEffect(() => {
-    if (searchTerm.trim()) {
-      handleProductSearch();
-    } else {
-      loadProducts();
-    }
-  }, [searchTerm]);
-
-  useEffect(() => {
-    if (salesSearchTerm.trim()) {
-      handleSalesSearch();
-    } else {
-      loadSales();
-    }
-  }, [salesSearchTerm]);
-
   const loadData = async () => {
     try {
-      setIsLoading(true);
-      setError(null);
-      await Promise.all([loadProducts(), loadSales()]);
+      const [productsData, salesData] = await Promise.all([
+        getProducts(),
+        getSales(),
+      ]);
+      setProducts(productsData || []);
+      setSales(salesData || []);
     } catch (error) {
       console.error("Error loading data:", error);
-      setError(
-        error instanceof Error ? error.message : "خطأ في تحميل البيانات",
-      );
+    }
+  };
+
+  const filteredProducts = products.filter((product) =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  const filteredSales = sales.filter(
+    (sale) =>
+      sale.buyerName.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
+      sale.productName.toLowerCase().includes(salesSearchTerm.toLowerCase()) ||
+      sale.id.toLowerCase().includes(salesSearchTerm.toLowerCase()),
+  );
+
+  const validateProductForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!productForm.name.trim()) {
+      newErrors.productName = "اسم المنتج مطلوب";
+    }
+
+    const quantity = parseInt(productForm.quantity);
+    if (!productForm.quantity || quantity <= 0) {
+      newErrors.productQuantity = "الكمية يجب ��ن تكون أكبر من صفر";
+    }
+
+    const price = parseFloat(productForm.price);
+    if (!productForm.price || price <= 0) {
+      newErrors.productPrice = "السعر يجب أن يكون أكبر من صفر";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const validateSaleForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!saleForm.buyerName.trim()) {
+      newErrors.buyerName = "اسم المشتري مطلوب";
+    }
+
+    if (!saleForm.productId) {
+      newErrors.productId = "يجب اختيار المنتج";
+    }
+
+    const quantity = parseInt(saleForm.quantity);
+    if (!saleForm.quantity || quantity <= 0) {
+      newErrors.quantity = "الكمية يجب أن تكون أكبر من صفر";
+    }
+
+    // Check if product has enough stock
+    if (saleForm.productId && quantity > 0) {
+      const product = products.find((p) => p.id === saleForm.productId);
+      if (product && quantity > product.quantity) {
+        newErrors.quantity = `الكمية المتوفرة: ${product.quantity} فقط`;
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleAddProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateProductForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const newProduct: Product = {
+        id: Date.now().toString(),
+        name: productForm.name.trim(),
+        quantity: parseInt(productForm.quantity),
+        price: parseFloat(productForm.price),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await saveProduct(newProduct);
+      await loadData();
+
+      // Reset form
+      setProductForm({
+        name: "",
+        quantity: "",
+        price: "",
+      });
+      setErrors({});
+    } catch (error) {
+      console.error("Error adding product:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const loadProducts = async () => {
-    const data = await getProducts();
-    setProducts(data);
+  const handleDeleteProduct = (product: Product) => {
+    setProductToDelete(product);
+    setDeleteDialogOpen(true);
   };
 
-  const loadSales = async () => {
-    const data = await getSales();
-    setSales(data);
+  const confirmDeleteProduct = async () => {
+    if (productToDelete) {
+      try {
+        await deleteProduct(productToDelete.id);
+        await loadData();
+        setDeleteDialogOpen(false);
+        setProductToDelete(null);
+      } catch (error) {
+        console.error("Error deleting product:", error);
+      }
+    }
   };
 
-  const handleProductSearch = async () => {
+  const handleSale = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateSaleForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      setError(null);
-      const data = await searchProducts(searchTerm);
-      setProducts(data);
+      const product = products.find((p) => p.id === saleForm.productId);
+      if (!product) {
+        throw new Error("Product not found");
+      }
+
+      const quantity = parseInt(saleForm.quantity);
+      const totalPrice = product.price * quantity;
+
+      const newSale: Sale = {
+        id: Date.now().toString(),
+        buyerName: saleForm.buyerName.trim(),
+        productId: saleForm.productId,
+        productName: product.name,
+        quantity: quantity,
+        unitPrice: product.price,
+        totalPrice: totalPrice,
+        createdAt: new Date(),
+      };
+
+      // Save sale and update product quantity
+      await saveSale(newSale);
+      await updateProductQuantity(
+        saleForm.productId,
+        product.quantity - quantity,
+      );
+
+      await loadData();
+
+      // Reset form
+      setSaleForm({
+        buyerName: "",
+        productId: "",
+        quantity: "",
+      });
+      setErrors({});
+      setSaleSuccess(newSale);
+
+      // Clear success message after 5 seconds
+      setTimeout(() => setSaleSuccess(null), 5000);
     } catch (error) {
-      console.error("Error searching products:", error);
-      setError(error instanceof Error ? error.message : "خطأ في البحث");
+      console.error("Error processing sale:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleSalesSearch = async () => {
-    try {
-      setError(null);
-      const data = await searchSales(salesSearchTerm);
-      setSales(data);
-    } catch (error) {
-      console.error("Error searching sales:", error);
-      setError(error instanceof Error ? error.message : "خطأ في البحث");
+  const handlePrintInvoice = async (sale: Sale) => {
+    // Create temporary container for rendering React component
+    const tempContainer = document.createElement("div");
+    tempContainer.style.position = "absolute";
+    tempContainer.style.left = "-9999px";
+    tempContainer.style.top = "-9999px";
+    document.body.appendChild(tempContainer);
+
+    // Dynamic import React and ReactDOM
+    const React = await import("react");
+    const { createRoot } = await import("react-dom/client");
+
+    // Create root and render the invoice template
+    const root = createRoot(tempContainer);
+
+    root.render(React.createElement(InvoicePrintTemplate, { sale }));
+
+    // Wait for component to render
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // Get the print content
+    const printContent = document.getElementById("invoice-print-content");
+
+    if (printContent) {
+      // Create new window for printing
+      const printWindow = window.open("", "_blank");
+
+      if (printWindow) {
+        // Clone content and make it visible
+        const clonedContent = printContent.cloneNode(true) as HTMLElement;
+        clonedContent.style.display = "block";
+
+        // Write complete HTML document
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html dir="rtl" lang="ar">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>فاتورة - ${sale.buyerName}</title>
+            <style>
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+
+              body {
+                font-family: 'Cairo', 'Tajawal', 'Amiri', 'Noto Sans Arabic', Arial, sans-serif;
+                direction: rtl;
+                background: white;
+                color: #000;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                color-adjust: exact;
+              }
+
+              @media print {
+                body {
+                  margin: 0;
+                  padding: 0;
+                }
+                @page {
+                  size: A4;
+                  margin: 0;
+                }
+                * {
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                  color-adjust: exact;
+                }
+              }
+            </style>
+          </head>
+          <body>
+            ${clonedContent.outerHTML}
+          </body>
+          </html>
+        `);
+
+        printWindow.document.close();
+
+        // Wait for content to load then print
+        printWindow.onload = () => {
+          setTimeout(() => {
+            printWindow.focus();
+            printWindow.print();
+
+            // Close window after printing
+            setTimeout(() => {
+              printWindow.close();
+            }, 500);
+          }, 100);
+        };
+
+        // Fallback if onload doesn't fire
+        setTimeout(() => {
+          if (!printWindow.closed) {
+            printWindow.focus();
+            printWindow.print();
+          }
+        }, 1000);
+      }
     }
+
+    // Clean up temporary container
+    setTimeout(() => {
+      document.body.removeChild(tempContainer);
+    }, 500);
   };
 
-  const validateProductForm = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (!productFormData.name.trim()) {
-      errors.name = "اسم المنتج مطلوب";
-    }
-
-    if (!productFormData.quantity || isNaN(Number(productFormData.quantity))) {
-      errors.quantity = "الكمية يجب أن تكون رقم صحيح";
-    }
-
-    if (!productFormData.price || isNaN(Number(productFormData.price))) {
-      errors.price = "السعر يجب أن يكون رقم صحيح";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+  const calculateTotalRevenue = () => {
+    return sales.reduce((total, sale) => total + sale.totalPrice, 0);
   };
 
-  const validateSaleForm = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (!saleFormData.buyer_name.trim()) {
-      errors.buyer_name = "اسم المشتري مطلوب";
-    }
-
-    if (!saleFormData.product_id) {
-      errors.product_id = "يجب اختيار المنتج";
-    }
-
-    if (!saleFormData.quantity || isNaN(Number(saleFormData.quantity))) {
-      errors.quantity = "الكمية يجب أن تكون رقم صحيح";
-    }
-
-    const selectedProduct = products.find(
-      (p) => p.id === saleFormData.product_id,
-    );
-    if (
-      selectedProduct &&
-      Number(saleFormData.quantity) > selectedProduct.quantity
-    ) {
-      errors.quantity = "الكمية المطلوبة أكبر من المتاح";
-    }
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const resetProductForm = () => {
-    setProductFormData({
-      name: "",
-      quantity: "",
-      price: "",
-      description: "",
-      category: "",
-    });
-    setFormErrors({});
-    setEditingProduct(null);
-  };
-
-  const resetSaleForm = () => {
-    setSaleFormData({
-      buyer_name: "",
-      product_id: "",
-      quantity: "",
-      notes: "",
-    });
-    setFormErrors({});
-  };
-
-  const handleAddProduct = () => {
-    resetProductForm();
-    setAddProductModalOpen(true);
+  const getLowStockProducts = () => {
+    return products.filter((product) => product.quantity <= 5);
   };
 
   const handleEditProduct = (product: Product) => {
-    setProductFormData({
+    setProductToEdit(product);
+    setEditProductForm({
       name: product.name,
       quantity: product.quantity.toString(),
       price: product.price.toString(),
-      description: product.description || "",
-      category: product.category || "",
     });
-    setEditingProduct(product);
-    setFormErrors({});
-    setEditProductModalOpen(true);
+    setEditProductDialogOpen(true);
   };
 
-  const handleDeleteProduct = (product: Product) => {
-    setProductToDelete(product);
-    setDeleteProductDialogOpen(true);
+  const handleQuickSale = (product: Product) => {
+    setSaleForm((prev) => ({
+      ...prev,
+      productId: product.id,
+    }));
+    // Switch to sales tab
+    const salesTabTrigger = document.querySelector(
+      '[data-state="inactive"][value="sales"]',
+    ) as HTMLElement;
+    if (salesTabTrigger) {
+      salesTabTrigger.click();
+    }
   };
 
-  const handleAddSale = () => {
-    resetSaleForm();
-    setAddSaleModalOpen(true);
+  const confirmEditProduct = async () => {
+    if (!productToEdit) return;
+
+    const newErrors: Record<string, string> = {};
+
+    if (!editProductForm.name.trim()) {
+      newErrors.editProductName = "اسم المنتج مطلوب";
+    }
+
+    const quantity = parseInt(editProductForm.quantity);
+    if (!editProductForm.quantity || quantity <= 0) {
+      newErrors.editProductQuantity = "الكمية يجب أن تكون أكبر من صفر";
+    }
+
+    const price = parseFloat(editProductForm.price);
+    if (!editProductForm.price || price <= 0) {
+      newErrors.editProductPrice = "السعر يجب أن يكون أكبر من صفر";
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    try {
+      const updatedProduct: Product = {
+        ...productToEdit,
+        name: editProductForm.name.trim(),
+        quantity: quantity,
+        price: price,
+        updatedAt: new Date(),
+      };
+
+      await saveProduct(updatedProduct);
+      await loadData();
+      setEditProductDialogOpen(false);
+      setProductToEdit(null);
+      setErrors({});
+    } catch (error) {
+      console.error("Error updating product:", error);
+    }
   };
 
   const handleDeleteSale = (sale: Sale) => {
@@ -295,1021 +477,895 @@ export default function Inventory() {
     setDeleteSaleDialogOpen(true);
   };
 
-  const handlePrintInvoice = (sale: Sale) => {
-    navigate(`/dashboard/print-invoice/${sale.id}`);
-  };
+  const confirmDeleteSale = async () => {
+    if (saleToDelete) {
+      try {
+        // Restore product quantity
+        const product = products.find((p) => p.id === saleToDelete.productId);
+        if (product) {
+          await updateProductQuantity(
+            saleToDelete.productId,
+            product.quantity + saleToDelete.quantity,
+          );
+        }
 
-  const handlePrintConfirmation = (sale: Sale) => {
-    setSaleForPrint(sale);
-    setPrintConfirmDialogOpen(true);
-  };
-
-  const handleConfirmPrint = () => {
-    if (saleForPrint) {
-      setPrintConfirmDialogOpen(false);
-      navigate(`/dashboard/print-invoice/${saleForPrint.id}`);
-    }
-  };
-
-  const handleSaveProduct = async () => {
-    if (!validateProductForm()) return;
-
-    try {
-      setIsSaving(true);
-      setError(null);
-
-      await saveProduct(productFormData);
-
-      setSuccess("تم إضافة المنتج بنجاح");
-      setAddProductModalOpen(false);
-      resetProductForm();
-      await loadProducts();
-
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error) {
-      console.error("Error saving product:", error);
-      setError(error instanceof Error ? error.message : "خطأ في حفظ المنتج");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleUpdateProduct = async () => {
-    if (!validateProductForm() || !editingProduct) return;
-
-    try {
-      setIsSaving(true);
-      setError(null);
-
-      await updateProduct(editingProduct.id, productFormData);
-
-      setSuccess("تم تحديث المنتج بنجاح");
-      setEditProductModalOpen(false);
-      resetProductForm();
-      await loadProducts();
-
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error) {
-      console.error("Error updating product:", error);
-      setError(error instanceof Error ? error.message : "خطأ في تحديث المنتج");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeleteProductConfirm = async () => {
-    if (!productToDelete) return;
-
-    try {
-      setError(null);
-      await deleteProduct(productToDelete.id);
-      setSuccess("تم حذف المنتج بنجاح");
-      setDeleteProductDialogOpen(false);
-      setProductToDelete(null);
-      await loadProducts();
-
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error) {
-      console.error("Error deleting product:", error);
-      setError(error instanceof Error ? error.message : "خطأ في حذف المنتج");
-    }
-  };
-
-  const handleSaveSale = async () => {
-    if (!validateSaleForm()) return;
-
-    try {
-      setIsSaving(true);
-      setError(null);
-
-      await saveSale(saleFormData);
-
-      setSuccess("تم تسجيل عملية البيع بنجاح");
-      setAddSaleModalOpen(false);
-
-      // جلب المبيعة المحفوظة حديثاً لعرض خيار الطباعة
-      await loadData(); // Reload both products and sales
-
-      // العثور على المبيعة الجديدة وعرض خيار الطباعة
-      const updatedSales = await getSales();
-      const newSale = updatedSales[0]; // المبيعة الأحدث
-
-      resetSaleForm();
-
-      // عرض خيار الطباعة
-      if (newSale) {
-        handlePrintConfirmation(newSale);
+        await deleteSale(saleToDelete.id);
+        await loadData();
+        setDeleteSaleDialogOpen(false);
+        setSaleToDelete(null);
+      } catch (error) {
+        console.error("Error deleting sale:", error);
       }
-
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error) {
-      console.error("Error saving sale:", error);
-      setError(error instanceof Error ? error.message : "خطأ في تسجيل البيع");
-    } finally {
-      setIsSaving(false);
     }
   };
-
-  const handleDeleteSaleConfirm = async () => {
-    if (!saleToDelete) return;
-
-    try {
-      setError(null);
-      await deleteSale(saleToDelete.id);
-      setSuccess("تم حذف عملية البيع وإعادة الكمية للمخزون");
-      setDeleteSaleDialogOpen(false);
-      setSaleToDelete(null);
-      await loadData(); // Reload both products and sales
-
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (error) {
-      console.error("Error deleting sale:", error);
-      setError(
-        error instanceof Error ? error.message : "خطأ في حذف عملية البيع",
-      );
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), "dd MMMM yyyy", { locale: ar });
-    } catch {
-      return "تاريخ غير صحيح";
-    }
-  };
-
-  const formatDateTime = (dateString: string) => {
-    try {
-      return format(new Date(dateString), "dd MMMM yyyy - HH:mm", {
-        locale: ar,
-      });
-    } catch {
-      return "تاريخ غير صحيح";
-    }
-  };
-
-  const getSelectedProduct = () => {
-    return products.find((p) => p.id === saleFormData.product_id);
-  };
-
-  const calculateTotalValue = () => {
-    return products.reduce(
-      (total, product) => total + product.quantity * product.price,
-      0,
-    );
-  };
-
-  const calculateTotalSales = () => {
-    return sales.reduce((total, sale) => total + sale.total_price, 0);
-  };
-
-  const getLowStockProducts = () => {
-    return products.filter((product) => product.quantity <= 5);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto"></div>
-          <h2 className="text-xl font-semibold text-gray-900">
-            جاري تحميل المخزون...
-          </h2>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div
-      className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 p-6"
-      dir="rtl"
-    >
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl text-white">
-              <Package className="h-8 w-8" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                إدارة المخزون والمبيعات
-              </h1>
-              <p className="text-gray-600">
-                متابعة المنتجات والمبيعات في الصالة
-              </p>
-            </div>
-          </div>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-gradient-to-r from-orange-500 to-amber-500 rounded-lg">
+          <Package className="h-6 w-6 text-white" />
         </div>
-
-        {/* Success Message */}
-        {success && (
-          <Alert className="border-green-200 bg-green-50">
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription className="text-green-700">
-              {success}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <Alert className="border-red-200 bg-red-50">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-red-700">
-              {error}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <Package className="h-8 w-8 text-purple-600" />
-                <div>
-                  <p className="text-sm text-gray-600">إجمالي المنتجات</p>
-                  <p className="text-2xl font-bold">{products.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <DollarSign className="h-8 w-8 text-green-600" />
-                <div>
-                  <p className="text-sm text-gray-600">قيمة المخزون</p>
-                  <p className="text-2xl font-bold">
-                    {calculateTotalValue().toFixed(0)} د.ع
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="h-8 w-8 text-blue-600" />
-                <div>
-                  <p className="text-sm text-gray-600">إجمالي المبيعات</p>
-                  <p className="text-2xl font-bold">{sales.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <TrendingUp className="h-8 w-8 text-orange-600" />
-                <div>
-                  <p className="text-sm text-gray-600">مبيعات اليوم</p>
-                  <p className="text-2xl font-bold">
-                    {calculateTotalSales().toFixed(0)} د.ع
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">إدارة المخزن</h1>
+          <p className="text-gray-600">إدارة المنتجات والمبيعات</p>
         </div>
-
-        {/* Low Stock Warning */}
-        {getLowStockProducts().length > 0 && (
-          <Alert className="border-yellow-200 bg-yellow-50">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-yellow-700">
-              تحذير: {getLowStockProducts().length} منتج بكمية قليلة (5 قطع أو
-              أقل)
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Tabs */}
-        <Tabs defaultValue="products" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="products">المنتجات</TabsTrigger>
-            <TabsTrigger value="sales">المبيعات</TabsTrigger>
-          </TabsList>
-
-          {/* Products Tab */}
-          <TabsContent value="products" className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
-                  <Input
-                    placeholder="البحث في المنتجات..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pr-10 text-right"
-                  />
-                </div>
-              </div>
-              <Button
-                onClick={handleAddProduct}
-                className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
-              >
-                <Plus className="h-5 w-5 ml-2" />
-                إضافة منتج
-              </Button>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>قائمة المنتجات ({products.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {products.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Package className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-500 mb-2">
-                      لا توجد منتجات
-                    </h3>
-                    <p className="text-gray-400 mb-6">
-                      ابدأ بإضافة أول منتج للمخزون
-                    </p>
-                    <Button
-                      onClick={handleAddProduct}
-                      className="bg-purple-500"
-                    >
-                      <Plus className="h-5 w-5 ml-2" />
-                      إضافة منتج
-                    </Button>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">اسم المنتج</TableHead>
-                        <TableHead className="text-right">الفئة</TableHead>
-                        <TableHead className="text-right">الكمية</TableHead>
-                        <TableHead className="text-right">السعر</TableHead>
-                        <TableHead className="text-right">
-                          القيمة الإجمالية
-                        </TableHead>
-                        <TableHead className="text-right">الحالة</TableHead>
-                        <TableHead className="text-right">الإجراءات</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {products.map((product) => (
-                        <TableRow key={product.id}>
-                          <TableCell className="font-medium">
-                            <div>
-                              <div>{product.name}</div>
-                              {product.description && (
-                                <div className="text-sm text-gray-500">
-                                  {product.description}
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {product.category && (
-                              <Badge variant="secondary">
-                                {product.category}
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <span
-                              className={
-                                product.quantity <= 5
-                                  ? "text-red-600 font-bold"
-                                  : "text-gray-700"
-                              }
-                            >
-                              {product.quantity}
-                            </span>
-                          </TableCell>
-                          <TableCell>{product.price.toFixed(0)} د.ع</TableCell>
-                          <TableCell>
-                            {(product.quantity * product.price).toFixed(0)} د.ع
-                          </TableCell>
-                          <TableCell>
-                            {product.quantity <= 5 ? (
-                              <Badge variant="destructive">
-                                <TrendingDown className="h-3 w-3 ml-1" />
-                                كمية قليلة
-                              </Badge>
-                            ) : (
-                              <Badge variant="default">
-                                <TrendingUp className="h-3 w-3 ml-1" />
-                                متوفر
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEditProduct(product)}
-                                className="border-purple-200 text-purple-600 hover:bg-purple-50"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteProduct(product)}
-                                className="border-red-200 text-red-600 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Sales Tab */}
-          <TabsContent value="sales" className="space-y-6">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
-                  <Input
-                    placeholder="البحث في المبيعات..."
-                    value={salesSearchTerm}
-                    onChange={(e) => setSalesSearchTerm(e.target.value)}
-                    className="pr-10 text-right"
-                  />
-                </div>
-              </div>
-              <Button
-                onClick={handleAddSale}
-                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
-              >
-                <ShoppingCart className="h-5 w-5 ml-2" />
-                تسجيل بيع
-              </Button>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>سجل المبيعات ({sales.length})</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {sales.length === 0 ? (
-                  <div className="text-center py-12">
-                    <ShoppingCart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-500 mb-2">
-                      لا توجد مبيعات
-                    </h3>
-                    <p className="text-gray-400 mb-6">
-                      ابدأ بتسجيل أول عملية بيع
-                    </p>
-                    <Button onClick={handleAddSale} className="bg-green-500">
-                      <ShoppingCart className="h-5 w-5 ml-2" />
-                      تسجيل بيع
-                    </Button>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">
-                          اسم المشتري
-                        </TableHead>
-                        <TableHead className="text-right">المنتج</TableHead>
-                        <TableHead className="text-right">الكمية</TableHead>
-                        <TableHead className="text-right">سعر الوحدة</TableHead>
-                        <TableHead className="text-right">المجموع</TableHead>
-                        <TableHead className="text-right">التاريخ</TableHead>
-                        <TableHead className="text-right">الإجراءات</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sales.map((sale) => (
-                        <TableRow key={sale.id}>
-                          <TableCell className="font-medium">
-                            <div>
-                              <div>{sale.buyer_name}</div>
-                              {sale.notes && (
-                                <div className="text-sm text-gray-500">
-                                  {sale.notes}
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{sale.product_name}</TableCell>
-                          <TableCell>{sale.quantity}</TableCell>
-                          <TableCell>
-                            {sale.unit_price.toFixed(0)} د.ع
-                          </TableCell>
-                          <TableCell className="font-semibold">
-                            {sale.total_price.toFixed(0)} د.ع
-                          </TableCell>
-                          <TableCell className="text-gray-500">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4" />
-                              {formatDateTime(sale.created_at)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handlePrintInvoice(sale)}
-                                className="border-green-200 text-green-600 hover:bg-green-50"
-                              >
-                                <Printer className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteSale(sale)}
-                                className="border-red-200 text-red-600 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
       </div>
 
-      {/* Add Product Dialog */}
-      <Dialog open={addProductModalOpen} onOpenChange={setAddProductModalOpen}>
-        <DialogContent dir="rtl">
-          <DialogHeader>
-            <DialogTitle>إضافة منتج جديد</DialogTitle>
-            <DialogDescription>
-              أدخل بيانات المنتج الجديد الذي تريد إضافته للمخزون
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="add-product-name">اسم المنتج *</Label>
-              <Input
-                id="add-product-name"
-                value={productFormData.name}
-                onChange={(e) =>
-                  setProductFormData({
-                    ...productFormData,
-                    name: e.target.value,
-                  })
-                }
-                placeholder="اسم المنتج"
-                className={formErrors.name ? "border-red-500" : ""}
-              />
-              {formErrors.name && (
-                <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="add-product-quantity">الكمية *</Label>
-                <Input
-                  id="add-product-quantity"
-                  type="number"
-                  value={productFormData.quantity}
-                  onChange={(e) =>
-                    setProductFormData({
-                      ...productFormData,
-                      quantity: e.target.value,
-                    })
-                  }
-                  placeholder="الكمية"
-                  className={formErrors.quantity ? "border-red-500" : ""}
-                />
-                {formErrors.quantity && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors.quantity}
-                  </p>
-                )}
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Archive className="h-5 w-5 text-blue-600" />
               </div>
-
               <div>
-                <Label htmlFor="add-product-price">السعر *</Label>
-                <Input
-                  id="add-product-price"
-                  type="number"
-                  step="0.01"
-                  value={productFormData.price}
-                  onChange={(e) =>
-                    setProductFormData({
-                      ...productFormData,
-                      price: e.target.value,
-                    })
-                  }
-                  placeholder="السعر"
-                  className={formErrors.price ? "border-red-500" : ""}
-                />
-                {formErrors.price && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors.price}
-                  </p>
-                )}
+                <p className="text-sm text-gray-600">إجمالي المنتجات</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {products.length}
+                </p>
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div>
-              <Label htmlFor="add-product-category">الفئة</Label>
-              <Select
-                value={productFormData.category}
-                onValueChange={(value) =>
-                  setProductFormData({ ...productFormData, category: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر الفئة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="add-product-description">الوصف</Label>
-              <Textarea
-                id="add-product-description"
-                value={productFormData.description}
-                onChange={(e) =>
-                  setProductFormData({
-                    ...productFormData,
-                    description: e.target.value,
-                  })
-                }
-                placeholder="وصف المنتج..."
-                rows={3}
-              />
-            </div>
-
-            <div className="flex gap-2 pt-4">
-              <Button
-                onClick={handleSaveProduct}
-                disabled={isSaving}
-                className="flex-1 bg-purple-500 hover:bg-purple-600"
-              >
-                {isSaving ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                ) : (
-                  <Save className="h-4 w-4 ml-2" />
-                )}
-                {isSaving ? "جاري الحفظ..." : "حفظ"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setAddProductModalOpen(false)}
-                disabled={isSaving}
-              >
-                <X className="h-4 w-4 ml-2" />
-                إلغاء
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Product Dialog */}
-      <Dialog
-        open={editProductModalOpen}
-        onOpenChange={setEditProductModalOpen}
-      >
-        <DialogContent dir="rtl">
-          <DialogHeader>
-            <DialogTitle>تعديل المنتج</DialogTitle>
-            <DialogDescription>
-              قم بتعديل بيانات المنتج "{editingProduct?.name}"
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="edit-product-name">اسم المنتج *</Label>
-              <Input
-                id="edit-product-name"
-                value={productFormData.name}
-                onChange={(e) =>
-                  setProductFormData({
-                    ...productFormData,
-                    name: e.target.value,
-                  })
-                }
-                placeholder="اسم المنتج"
-                className={formErrors.name ? "border-red-500" : ""}
-              />
-              {formErrors.name && (
-                <p className="text-red-500 text-sm mt-1">{formErrors.name}</p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-product-quantity">الكمية *</Label>
-                <Input
-                  id="edit-product-quantity"
-                  type="number"
-                  value={productFormData.quantity}
-                  onChange={(e) =>
-                    setProductFormData({
-                      ...productFormData,
-                      quantity: e.target.value,
-                    })
-                  }
-                  placeholder="الكمية"
-                  className={formErrors.quantity ? "border-red-500" : ""}
-                />
-                {formErrors.quantity && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors.quantity}
-                  </p>
-                )}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <DollarSign className="h-5 w-5 text-green-600" />
               </div>
-
               <div>
-                <Label htmlFor="edit-product-price">السعر *</Label>
-                <Input
-                  id="edit-product-price"
-                  type="number"
-                  step="0.01"
-                  value={productFormData.price}
-                  onChange={(e) =>
-                    setProductFormData({
-                      ...productFormData,
-                      price: e.target.value,
-                    })
-                  }
-                  placeholder="السعر"
-                  className={formErrors.price ? "border-red-500" : ""}
-                />
-                {formErrors.price && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors.price}
-                  </p>
-                )}
+                <p className="text-sm text-gray-600">إجمالي المبيعات</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {calculateTotalRevenue().toLocaleString()} د.ع
+                </p>
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div>
-              <Label htmlFor="edit-product-category">الفئة</Label>
-              <Select
-                value={productFormData.category}
-                onValueChange={(value) =>
-                  setProductFormData({ ...productFormData, category: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="اختر الفئة" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="edit-product-description">الوصف</Label>
-              <Textarea
-                id="edit-product-description"
-                value={productFormData.description}
-                onChange={(e) =>
-                  setProductFormData({
-                    ...productFormData,
-                    description: e.target.value,
-                  })
-                }
-                placeholder="وصف المنتج..."
-                rows={3}
-              />
-            </div>
-
-            <div className="flex gap-2 pt-4">
-              <Button
-                onClick={handleUpdateProduct}
-                disabled={isSaving}
-                className="flex-1 bg-purple-500 hover:bg-purple-600"
-              >
-                {isSaving ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                ) : (
-                  <Save className="h-4 w-4 ml-2" />
-                )}
-                {isSaving ? "جاري التحديث..." : "تحديث"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setEditProductModalOpen(false)}
-                disabled={isSaving}
-              >
-                <X className="h-4 w-4 ml-2" />
-                إلغاء
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Sale Dialog */}
-      <Dialog open={addSaleModalOpen} onOpenChange={setAddSaleModalOpen}>
-        <DialogContent dir="rtl">
-          <DialogHeader>
-            <DialogTitle>تسجيل عملية بيع</DialogTitle>
-            <DialogDescription>
-              سجل عملية بيع جديدة وخصم الكمية من المخزون
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="sale-buyer-name">اسم المشتري *</Label>
-              <Input
-                id="sale-buyer-name"
-                value={saleFormData.buyer_name}
-                onChange={(e) =>
-                  setSaleFormData({
-                    ...saleFormData,
-                    buyer_name: e.target.value,
-                  })
-                }
-                placeholder="اسم المشتري"
-                className={formErrors.buyer_name ? "border-red-500" : ""}
-              />
-              {formErrors.buyer_name && (
-                <p className="text-red-500 text-sm mt-1">
-                  {formErrors.buyer_name}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <ShoppingCart className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">عدد المبيعات</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {sales.length}
                 </p>
-              )}
+              </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <div>
-              <Label htmlFor="sale-product">المنتج *</Label>
-              <Select
-                value={saleFormData.product_id}
-                onValueChange={(value) =>
-                  setSaleFormData({ ...saleFormData, product_id: value })
-                }
-              >
-                <SelectTrigger
-                  className={formErrors.product_id ? "border-red-500" : ""}
-                >
-                  <SelectValue placeholder="اختر المنتج" />
-                </SelectTrigger>
-                <SelectContent>
-                  {products
-                    .filter((product) => product.quantity > 0)
-                    .map((product) => (
-                      <SelectItem key={product.id} value={product.id}>
-                        {product.name} - متوفر: {product.quantity} - السعر:{" "}
-                        {product.price.toFixed(0)} د.ع
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {formErrors.product_id && (
-                <p className="text-red-500 text-sm mt-1">
-                  {formErrors.product_id}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600">مخزون منخفض</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {getLowStockProducts().length}
                 </p>
-              )}
+              </div>
             </div>
+          </CardContent>
+        </Card>
+      </div>
 
-            <div>
-              <Label htmlFor="sale-quantity">الكمية *</Label>
-              <Input
-                id="sale-quantity"
-                type="number"
-                value={saleFormData.quantity}
-                onChange={(e) =>
-                  setSaleFormData({ ...saleFormData, quantity: e.target.value })
-                }
-                placeholder="الكمية"
-                max={getSelectedProduct()?.quantity || 0}
-                className={formErrors.quantity ? "border-red-500" : ""}
-              />
-              {formErrors.quantity && (
-                <p className="text-red-500 text-sm mt-1">
-                  {formErrors.quantity}
-                </p>
-              )}
-              {getSelectedProduct() && (
-                <p className="text-sm text-gray-600 mt-1">
-                  متوفر: {getSelectedProduct()!.quantity} قطعة
-                </p>
-              )}
-            </div>
-
-            {getSelectedProduct() && saleFormData.quantity && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-semibold mb-2">ملخص عملية البيع:</h4>
-                <div className="space-y-1 text-sm">
-                  <p>المنتج: {getSelectedProduct()!.name}</p>
-                  <p>الكمية: {saleFormData.quantity}</p>
-                  <p>
-                    سعر الوحدة: {getSelectedProduct()!.price.toFixed(0)} د.ع
-                  </p>
-                  <p className="font-bold">
-                    المجموع:{" "}
-                    {(
-                      Number(saleFormData.quantity) *
-                      getSelectedProduct()!.price
-                    ).toFixed(0)}{" "}
-                    د.ع
+      {/* Success Message */}
+      {saleSuccess && (
+        <Card className="border-green-200 bg-green-50">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <ShoppingCart className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-medium text-green-900">
+                    تمت عملية البيع بنجاح!
+                  </h3>
+                  <p className="text-sm text-green-700">
+                    تم بيع {saleSuccess.quantity} من {saleSuccess.productName}
+                    بمبلغ {saleSuccess.totalPrice.toLocaleString()} دينار عراقي
                   </p>
                 </div>
               </div>
-            )}
-
-            <div>
-              <Label htmlFor="sale-notes">ملاحظات</Label>
-              <Textarea
-                id="sale-notes"
-                value={saleFormData.notes}
-                onChange={(e) =>
-                  setSaleFormData({ ...saleFormData, notes: e.target.value })
-                }
-                placeholder="ملاحظات إضافية..."
-                rows={3}
-              />
-            </div>
-
-            <div className="flex gap-2 pt-4">
-              <Button
-                onClick={handleSaveSale}
-                disabled={isSaving}
-                className="flex-1 bg-green-500 hover:bg-green-600"
-              >
-                {isSaving ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                ) : (
-                  <ShoppingCart className="h-4 w-4 ml-2" />
-                )}
-                {isSaving ? "جاري الت��جيل..." : "تسجيل البيع"}
-              </Button>
               <Button
                 variant="outline"
-                onClick={() => setAddSaleModalOpen(false)}
-                disabled={isSaving}
+                size="sm"
+                onClick={() => handlePrintInvoice(saleSuccess)}
+                className="text-green-700 border-green-300 hover:bg-green-100"
               >
-                <X className="h-4 w-4 ml-2" />
-                إلغاء
+                <Printer className="h-4 w-4 mr-2" />
+                طباعة الفاتورة
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Delete Product Confirmation Dialog */}
-      <AlertDialog
-        open={deleteProductDialogOpen}
-        onOpenChange={setDeleteProductDialogOpen}
-      >
+      {/* Low Stock Alert */}
+      {getLowStockProducts().length > 0 && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-5 w-5 text-yellow-600" />
+              <div>
+                <h3 className="font-medium text-yellow-900">
+                  تنبيه: مخزون منخفض
+                </h3>
+                <p className="text-sm text-yellow-700">
+                  يوجد {getLowStockProducts().length} منتجات بمخزون منخفض (5 قطع
+                  أو أقل)
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Tabs defaultValue="products" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 h-12 bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200">
+          <TabsTrigger
+            value="products"
+            className="flex items-center gap-2 text-base font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-amber-500 data-[state=active]:text-white"
+          >
+            <Package className="h-5 w-5" />
+            📦 إدارة المنتجات
+          </TabsTrigger>
+          <TabsTrigger
+            value="sales"
+            className="flex items-center gap-2 text-base font-medium data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white"
+          >
+            <ShoppingCart className="h-5 w-5" />
+            💰 المبيعات
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Products Tab */}
+        <TabsContent value="products" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Add Product Form */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-orange-600" />
+                  إضافة منتج جديد
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleAddProduct} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="productName" className="text-right block">
+                      اسم المنتج *
+                    </Label>
+                    <Input
+                      id="productName"
+                      value={productForm.name}
+                      onChange={(e) =>
+                        setProductForm((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      placeholder="أدخل اسم المنتج"
+                      className={cn(
+                        "text-right",
+                        errors.productName && "border-red-500",
+                      )}
+                    />
+                    {errors.productName && (
+                      <p className="text-sm text-red-600 text-right">
+                        {errors.productName}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="productQuantity"
+                      className="text-right block"
+                    >
+                      الكمية *
+                    </Label>
+                    <Input
+                      id="productQuantity"
+                      type="number"
+                      value={productForm.quantity}
+                      onChange={(e) =>
+                        setProductForm((prev) => ({
+                          ...prev,
+                          quantity: e.target.value,
+                        }))
+                      }
+                      placeholder="عدد القطع"
+                      min="1"
+                      className={cn(
+                        "text-right",
+                        errors.productQuantity && "border-red-500",
+                      )}
+                    />
+                    {errors.productQuantity && (
+                      <p className="text-sm text-red-600 text-right">
+                        {errors.productQuantity}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="productPrice" className="text-right block">
+                      السعر (دينار عراقي) *
+                    </Label>
+                    <Input
+                      id="productPrice"
+                      type="number"
+                      step="0.01"
+                      value={productForm.price}
+                      onChange={(e) =>
+                        setProductForm((prev) => ({
+                          ...prev,
+                          price: e.target.value,
+                        }))
+                      }
+                      placeholder="سعر الوحدة"
+                      min="0.01"
+                      className={cn(
+                        "text-right",
+                        errors.productPrice && "border-red-500",
+                      )}
+                    />
+                    {errors.productPrice && (
+                      <p className="text-sm text-red-600 text-right">
+                        {errors.productPrice}
+                      </p>
+                    )}
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        جاري الإضافة...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        إضافة المنتج
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Products List */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Search */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="البحث في المنتجات..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pr-10 text-right"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Products Grid */}
+              {filteredProducts.length === 0 ? (
+                <Card className="border-dashed border-2 border-gray-300">
+                  <CardContent className="p-12 text-center">
+                    <div className="mx-auto w-24 h-24 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center mb-4">
+                      <Package className="h-12 w-12 text-orange-500" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                      {products.length === 0
+                        ? "لا توجد منتجات حتى الآن"
+                        : "لم يتم العثور على نتائج"}
+                    </h3>
+                    <p className="text-gray-600 mb-6">
+                      {products.length === 0
+                        ? "ابدأ بإضافة أول منتج للمخزن لبدء إدارة المبيعات"
+                        : "جرب تغيير كلمات البحث أو تصفح جميع المنتجات"}
+                    </p>
+                    {products.length === 0 && (
+                      <div className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg inline-block">
+                        💡 نصيحة: أضف منتجات متنوعة لتسهيل عملية البيع والمتابعة
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {filteredProducts.map((product) => (
+                    <Card
+                      key={product.id}
+                      className={cn(
+                        "hover:shadow-xl transition-all duration-300 hover:scale-105 group relative overflow-hidden",
+                        product.quantity <= 5
+                          ? "border-2 border-yellow-300 bg-gradient-to-br from-yellow-50 to-orange-50 shadow-yellow-100"
+                          : "border-gray-200 bg-gradient-to-br from-white to-gray-50 hover:border-orange-300",
+                      )}
+                    >
+                      {/* Status Indicator */}
+                      <div className="absolute top-2 left-2">
+                        {product.quantity <= 5 ? (
+                          <div className="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-medium animate-pulse">
+                            ⚠️ مخزون منخفض
+                          </div>
+                        ) : product.quantity <= 10 ? (
+                          <div className="bg-orange-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+                            📦 متوسط
+                          </div>
+                        ) : (
+                          <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-medium">
+                            ✅ متوفر
+                          </div>
+                        )}
+                      </div>
+
+                      <CardContent className="p-6 pt-12">
+                        {/* Product Header */}
+                        <div className="text-center mb-6">
+                          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                            <Package className="h-8 w-8 text-orange-600" />
+                          </div>
+                          <h3 className="text-xl font-bold text-gray-900 mb-1 group-hover:text-orange-600 transition-colors">
+                            {product.name}
+                          </h3>
+                          <p className="text-sm text-gray-500">
+                            📅 أضيف في{" "}
+                            {new Date(product.createdAt).toLocaleDateString(
+                              "en-GB",
+                            )}
+                          </p>
+                        </div>
+
+                        {/* Product Stats */}
+                        <div className="space-y-4 mb-6">
+                          <div className="bg-white/70 backdrop-blur-sm p-4 rounded-lg border border-gray-200/50">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                                📦 الكمية المتوفرة
+                              </span>
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  "text-sm font-bold px-3 py-1",
+                                  product.quantity <= 5
+                                    ? "bg-red-100 text-red-700 border-red-200"
+                                    : product.quantity <= 10
+                                      ? "bg-yellow-100 text-yellow-700 border-yellow-200"
+                                      : "bg-green-100 text-green-700 border-green-200",
+                                )}
+                              >
+                                {product.quantity} قطعة
+                              </Badge>
+                            </div>
+
+                            {/* Quantity Progress Bar */}
+                            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                              <div
+                                className={cn(
+                                  "h-2 rounded-full transition-all duration-500",
+                                  product.quantity <= 5
+                                    ? "bg-gradient-to-r from-red-400 to-red-500"
+                                    : product.quantity <= 10
+                                      ? "bg-gradient-to-r from-yellow-400 to-orange-500"
+                                      : "bg-gradient-to-r from-green-400 to-green-500",
+                                )}
+                                style={{
+                                  width: `${Math.min((product.quantity / 20) * 100, 100)}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="bg-white/70 backdrop-blur-sm p-4 rounded-lg border border-gray-200/50">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                                💰 سعر الوحدة
+                              </span>
+                              <span className="text-lg font-bold text-orange-600 bg-orange-50 px-3 py-1 rounded-full">
+                                {product.price.toLocaleString()} د.ع
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="bg-white/70 backdrop-blur-sm p-4 rounded-lg border border-gray-200/50">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                                💎 القيمة الإجمالية
+                              </span>
+                              <span className="text-lg font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-full">
+                                {(
+                                  product.quantity * product.price
+                                ).toLocaleString()}{" "}
+                                د.ع
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300 transition-all duration-200"
+                            onClick={() => handleEditProduct(product)}
+                          >
+                            <Edit className="h-4 w-4 mr-2" />
+                            تعديل
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 transition-all duration-200"
+                            onClick={() => handleDeleteProduct(product)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            حذف
+                          </Button>
+                        </div>
+
+                        {/* Quick Sale Button */}
+                        {product.quantity > 0 && (
+                          <Button
+                            className="w-full mt-3 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+                            onClick={() => handleQuickSale(product)}
+                          >
+                            <ShoppingCart className="h-4 w-4 mr-2" />
+                            بيع سريع
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Sales Tab */}
+        <TabsContent value="sales" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Sale Form */}
+            <Card className="lg:col-span-1">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5 text-green-600" />
+                  تسجيل عملية بيع
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSale} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="buyerName" className="text-right block">
+                      اسم المشتري *
+                    </Label>
+                    <Input
+                      id="buyerName"
+                      value={saleForm.buyerName}
+                      onChange={(e) =>
+                        setSaleForm((prev) => ({
+                          ...prev,
+                          buyerName: e.target.value,
+                        }))
+                      }
+                      placeholder="أدخل اسم المشتري"
+                      className={cn(
+                        "text-right",
+                        errors.buyerName && "border-red-500",
+                      )}
+                    />
+                    {errors.buyerName && (
+                      <p className="text-sm text-red-600 text-right">
+                        {errors.buyerName}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="productSelect" className="text-right block">
+                      المنتج *
+                    </Label>
+                    <Select
+                      value={saleForm.productId}
+                      onValueChange={(value) =>
+                        setSaleForm((prev) => ({ ...prev, productId: value }))
+                      }
+                    >
+                      <SelectTrigger className="text-right">
+                        <SelectValue placeholder="اختر المنتج" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products
+                          .filter((product) => product.quantity > 0)
+                          .map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              <div className="text-right">
+                                {product.name} - {product.price} د.ع (متوفر:{" "}
+                                {product.quantity})
+                              </div>
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.productId && (
+                      <p className="text-sm text-red-600 text-right">
+                        {errors.productId}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="saleQuantity" className="text-right block">
+                      الكمية *
+                    </Label>
+                    <Input
+                      id="saleQuantity"
+                      type="number"
+                      value={saleForm.quantity}
+                      onChange={(e) =>
+                        setSaleForm((prev) => ({
+                          ...prev,
+                          quantity: e.target.value,
+                        }))
+                      }
+                      placeholder="عدد القطع"
+                      min="1"
+                      className={cn(
+                        "text-right",
+                        errors.quantity && "border-red-500",
+                      )}
+                    />
+                    {errors.quantity && (
+                      <p className="text-sm text-red-600 text-right">
+                        {errors.quantity}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Sale Summary */}
+                  {saleForm.productId && saleForm.quantity && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <h4 className="font-medium text-green-800 mb-2">
+                        ملخص العملية
+                      </h4>
+                      {(() => {
+                        const product = products.find(
+                          (p) => p.id === saleForm.productId,
+                        );
+                        const quantity = parseInt(saleForm.quantity) || 0;
+                        if (product && quantity > 0) {
+                          return (
+                            <div className="text-sm space-y-1">
+                              <p>
+                                المنتج: <strong>{product.name}</strong>
+                              </p>
+                              <p>
+                                السعر الواحد:{" "}
+                                <strong>
+                                  {product.price.toLocaleString()} د.ع
+                                </strong>
+                              </p>
+                              <p>
+                                الكمية: <strong>{quantity}</strong>
+                              </p>
+                              <p className="font-bold text-green-700 pt-2 border-t">
+                                المجموع:{" "}
+                                {(product.price * quantity).toLocaleString()}{" "}
+                                د.ع
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        جاري المعالجة...
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingCart className="h-4 w-4 mr-2" />
+                        تسجيل البيع
+                      </>
+                    )}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Sales List */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Search */}
+              <Card>
+                <CardContent className="p-4">
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="البحث في المبيعات..."
+                      value={salesSearchTerm}
+                      onChange={(e) => setSalesSearchTerm(e.target.value)}
+                      className="pr-10 text-right"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Sales List */}
+              {filteredSales.length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <ShoppingCart className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900">
+                      {sales.length === 0
+                        ? "لا توجد مبيعات حتى الآن"
+                        : "لم يتم العثور على نتائج"}
+                    </h3>
+                    <p className="text-gray-600 mt-1">
+                      {sales.length === 0
+                        ? "ابدأ بتسجيل أول عملية بيع"
+                        : "جرب تغيير كلمات البحث"}
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {filteredSales.map((sale) => (
+                    <Card
+                      key={sale.id}
+                      className="hover:shadow-lg transition-shadow"
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="p-2 bg-green-100 rounded-lg">
+                                <ShoppingCart className="h-4 w-4 text-green-600" />
+                              </div>
+                              <div>
+                                <h3 className="font-medium text-gray-900">
+                                  {sale.buyerName}
+                                </h3>
+                                <p className="text-sm text-gray-500">
+                                  {new Date(sale.createdAt).toLocaleDateString(
+                                    "en-GB",
+                                  )}{" "}
+                                  -{" "}
+                                  {new Date(sale.createdAt).toLocaleTimeString(
+                                    "en-GB",
+                                  )}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <span>
+                                <strong>{sale.productName}</strong>
+                              </span>
+                              <span>الكمية: {sale.quantity}</span>
+                              <span className="font-bold text-green-600">
+                                {sale.totalPrice.toLocaleString()} د.ع
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePrintInvoice(sale)}
+                              className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                            >
+                              <Printer className="h-3 w-3 mr-1" />
+                              طباعة
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeleteSale(sale)}
+                              className="text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Delete Product Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-right">
-              تأكيد حذف المنتج
+              حذف المنتج
             </AlertDialogTitle>
             <AlertDialogDescription className="text-right">
-              هل أنت متأكد من حذف المنتج "{productToDelete?.name}"؟
-              <br />
-              <span className="text-red-600 font-medium">
-                سيتم حذف المنتج وجميع المبيعات المرتبطة به.
-              </span>
+              هل أنت متأكد من حذف المنتج "{productToDelete?.name}"؟ لا يمكن
+              التراجع عن هذا الإجراء.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteProductConfirm}
+              onClick={confirmDeleteProduct}
               className="bg-red-600 hover:bg-red-700"
             >
-              حذف نهائي
+              حذف
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Sale Confirmation Dialog */}
+      {/* Edit Product Dialog */}
+      <Dialog
+        open={editProductDialogOpen}
+        onOpenChange={setEditProductDialogOpen}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-right flex items-center gap-2">
+              <Edit className="h-5 w-5 text-blue-600" />
+              تعديل المنتج
+            </DialogTitle>
+            <DialogDescription className="text-right">
+              تعديل بيانات المنتج: {productToEdit?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="editProductName" className="text-right block">
+                اسم المنتج *
+              </Label>
+              <Input
+                id="editProductName"
+                value={editProductForm.name}
+                onChange={(e) =>
+                  setEditProductForm((prev) => ({
+                    ...prev,
+                    name: e.target.value,
+                  }))
+                }
+                placeholder="أدخل اسم المنتج"
+                className="text-right"
+              />
+              {errors.editProductName && (
+                <p className="text-sm text-red-600 text-right">
+                  {errors.editProductName}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editProductQuantity" className="text-right block">
+                الكمية *
+              </Label>
+              <Input
+                id="editProductQuantity"
+                type="number"
+                value={editProductForm.quantity}
+                onChange={(e) =>
+                  setEditProductForm((prev) => ({
+                    ...prev,
+                    quantity: e.target.value,
+                  }))
+                }
+                placeholder="عدد القطع"
+                min="1"
+                className="text-right"
+              />
+              {errors.editProductQuantity && (
+                <p className="text-sm text-red-600 text-right">
+                  {errors.editProductQuantity}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editProductPrice" className="text-right block">
+                السعر (دينار عراقي) *
+              </Label>
+              <Input
+                id="editProductPrice"
+                type="number"
+                step="0.01"
+                value={editProductForm.price}
+                onChange={(e) =>
+                  setEditProductForm((prev) => ({
+                    ...prev,
+                    price: e.target.value,
+                  }))
+                }
+                placeholder="سعر الوحدة"
+                min="0.01"
+                className="text-right"
+              />
+              {errors.editProductPrice && (
+                <p className="text-sm text-red-600 text-right">
+                  {errors.editProductPrice}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditProductDialogOpen(false);
+                setProductToEdit(null);
+                setErrors({});
+              }}
+            >
+              إلغاء
+            </Button>
+            <Button
+              onClick={confirmEditProduct}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              حفظ التعديلات
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Sale Dialog */}
       <AlertDialog
         open={deleteSaleDialogOpen}
         onOpenChange={setDeleteSaleDialogOpen}
@@ -1317,74 +1373,26 @@ export default function Inventory() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="text-right">
-              تأكيد حذف عملية البيع
+              حذف عملية البيع
             </AlertDialogTitle>
             <AlertDialogDescription className="text-right">
-              هل أنت متأكد من حذف عملية البيع؟
-              <br />
-              <span className="text-green-600 font-medium">
-                سيتم إعادة الكمية المباعة إلى المخزون.
-              </span>
+              هل أنت متأكد من حذف عملية البيع هذه؟ سيتم إرجاع الكمية للمخزن.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteSaleConfirm}
+              onClick={confirmDeleteSale}
               className="bg-red-600 hover:bg-red-700"
             >
-              حذف عملية البيع
+              حذف
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Print Confirmation Dialog */}
-      <AlertDialog
-        open={printConfirmDialogOpen}
-        onOpenChange={setPrintConfirmDialogOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-right">
-              🖨️ طباعة الفاتورة
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-right">
-              تم تسجيل عملية البيع بنجاح!
-              <br />
-              <span className="text-green-600 font-medium">
-                هل تريد طباعة الفاتورة الآن؟
-              </span>
-              {saleForPrint && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm">
-                  <div>
-                    <strong>المشتري:</strong> {saleForPrint.buyer_name}
-                  </div>
-                  <div>
-                    <strong>المنتج:</strong> {saleForPrint.product_name}
-                  </div>
-                  <div>
-                    <strong>المبلغ:</strong>{" "}
-                    {saleForPrint.total_price.toFixed(0)} د.ع
-                  </div>
-                </div>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2">
-            <AlertDialogCancel onClick={() => setSaleForPrint(null)}>
-              لا، شكراً
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmPrint}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Printer className="h-4 w-4 ml-2" />
-              نعم، اطبع الفاتورة
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Hidden Print Template */}
+      <InvoicePrintTemplate sale={sales[0] || {}} />
     </div>
   );
 }

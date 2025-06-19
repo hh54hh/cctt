@@ -20,9 +20,6 @@ import {
   User,
   GraduationCap,
   Apple,
-  ChefHat,
-  Sparkles,
-  MoreVertical,
 } from "lucide-react";
 import { Member, Course, DietPlan } from "@/lib/types";
 import {
@@ -31,7 +28,6 @@ import {
   getCourses,
   getDietPlans,
 } from "@/lib/storage-new";
-import { getSimpleMembers } from "@/lib/simpleMemberStorage";
 import { useNavigate } from "react-router-dom";
 import {
   AlertDialog,
@@ -43,16 +39,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import EnhancedMemberPrintTemplate from "@/components/EnhancedMemberPrintTemplate";
-import MembersSupabaseStatus from "@/components/MembersSupabaseStatus";
-import EmergencySyncFix from "@/components/EmergencySyncFix";
+import MemberPrintTemplateOfficial from "@/components/MemberPrintTemplateOfficial";
 
 export default function Members() {
   const [members, setMembers] = useState<Member[]>([]);
@@ -73,16 +60,14 @@ export default function Members() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [coursesData, dietPlansData] = await Promise.all([
+      const [membersData, coursesData, dietPlansData] = await Promise.all([
+        getMembers(),
         getCourses(),
         getDietPlans(),
       ]);
+      setMembers(membersData);
       setCourses(coursesData);
       setDietPlans(dietPlansData);
-
-      // Load members simply and safely
-      const membersData = await getSimpleMembers();
-      setMembers(membersData);
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
@@ -547,7 +532,7 @@ export default function Members() {
     const root = createRoot(tempContainer);
 
     root.render(
-      React.createElement(EnhancedMemberPrintTemplate, {
+      React.createElement(MemberPrintTemplateOfficial, {
         member,
         courses,
         dietPlans,
@@ -555,12 +540,10 @@ export default function Members() {
     );
 
     // Wait for component to render
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
-    // Get the enhanced print content
-    const printContent = document.getElementById(
-      "enhanced-member-print-content",
-    );
+    // Get the print content
+    const printContent = document.getElementById("member-print-content");
 
     if (printContent) {
       // Create new window for printing
@@ -571,7 +554,7 @@ export default function Members() {
         const clonedContent = printContent.cloneNode(true) as HTMLElement;
         clonedContent.style.display = "block";
 
-        // Write complete HTML document with enhanced styles
+        // Write complete HTML document
         printWindow.document.write(`
           <!DOCTYPE html>
           <html dir="rtl" lang="ar">
@@ -579,9 +562,6 @@ export default function Members() {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>بطاقة عضوية - ${member.name}</title>
-            <link rel="preconnect" href="https://fonts.googleapis.com">
-            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-            <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
             <style>
               * {
                 margin: 0;
@@ -589,7 +569,7 @@ export default function Members() {
                 box-sizing: border-box;
               }
 
-              html, body {
+              body {
                 font-family: 'Cairo', 'Tajawal', 'Amiri', 'Noto Sans Arabic', Arial, sans-serif;
                 direction: rtl;
                 background: white;
@@ -597,40 +577,30 @@ export default function Members() {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
                 color-adjust: exact;
-                width: 100%;
-                height: 100%;
               }
 
               @media print {
-                html, body {
+                body {
                   margin: 0;
                   padding: 0;
-                  width: 210mm;
-                  height: 297mm;
                 }
-
                 @page {
                   size: A4;
                   margin: 0;
                 }
-
                 * {
-                  -webkit-print-color-adjust: exact !important;
-                  print-color-adjust: exact !important;
-                  color-adjust: exact !important;
-                }
-
-                .page {
-                  page-break-after: always;
-                  page-break-inside: avoid;
-                }
-
-                .page:last-child {
-                  page-break-after: auto;
+                  -webkit-print-color-adjust: exact;
+                  print-color-adjust: exact;
+                  color-adjust: exact;
                 }
               }
 
-              /* Ensure all backgrounds and colors print correctly */
+              /* Additional styles for better print quality */
+              .print-container {
+                background: white !important;
+              }
+
+              /* Ensure colors and gradients print correctly */
               [style*="background"] {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
@@ -646,7 +616,7 @@ export default function Members() {
 
         printWindow.document.close();
 
-        // Wait for fonts and content to load then print
+        // Wait for content to load then print
         printWindow.onload = () => {
           setTimeout(() => {
             printWindow.focus();
@@ -655,8 +625,8 @@ export default function Members() {
             // Close window after printing
             setTimeout(() => {
               printWindow.close();
-            }, 1000);
-          }, 500);
+            }, 500);
+          }, 100);
         };
 
         // Fallback if onload doesn't fire
@@ -665,16 +635,14 @@ export default function Members() {
             printWindow.focus();
             printWindow.print();
           }
-        }, 2000);
+        }, 1000);
       }
     }
 
     // Clean up temporary container
     setTimeout(() => {
-      if (document.body.contains(tempContainer)) {
-        document.body.removeChild(tempContainer);
-      }
-    }, 1000);
+      document.body.removeChild(tempContainer);
+    }, 500);
   };
 
   if (isLoading) {
@@ -698,10 +666,7 @@ export default function Members() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">إدارة الأعضاء</h1>
-            <div className="flex items-center gap-3">
-              <p className="text-gray-600">عرض وإدارة جميع أعضاء الصالة</p>
-              <MembersSupabaseStatus />
-            </div>
+            <p className="text-gray-600">عرض وإدارة جميع أعضاء الصالة</p>
           </div>
         </div>
 
@@ -740,9 +705,6 @@ export default function Members() {
           </CardContent>
         </Card>
       )}
-
-      {/* Emergency Sync Fix */}
-      <EmergencySyncFix />
 
       {/* Search */}
       <Card>
@@ -1096,12 +1058,11 @@ export default function Members() {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-1 pt-2">
-                    {/* ��ر التعديل */}
+                  <div className="grid grid-cols-3 gap-1 pt-2">
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs h-8 flex-1 text-blue-600 border-blue-200 hover:bg-blue-50"
+                      className="text-xs h-8 text-blue-600 border-blue-200 hover:bg-blue-50"
                       onClick={() =>
                         navigate(
                           `/dashboard/add-member-enhanced?edit=${member.id}`,
@@ -1111,86 +1072,51 @@ export default function Members() {
                       <Edit className="h-3 w-3 mr-1" />
                       تعديل
                     </Button>
-
-                    {/* زر الطباعة */}
                     <Button
                       variant="outline"
                       size="sm"
-                      className="text-xs h-8 flex-1 text-purple-600 border-purple-200 hover:bg-purple-50"
+                      className="text-xs h-8 text-green-600 border-green-200 hover:bg-green-50"
+                      onClick={() => handleShowMemberDetails(member)}
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      التفاصيل
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-8 text-purple-600 border-purple-200 hover:bg-purple-50"
                       onClick={() => handlePrintMember(member)}
                     >
                       <Printer className="h-3 w-3 mr-1" />
                       طباعة
                     </Button>
 
-                    {/* قائمة الخيارات */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-8 px-2 text-gray-600 border-gray-200 hover:bg-gray-50"
-                        >
-                          <MoreVertical className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem
-                          onClick={() => handleShowMemberDetails(member)}
-                          className="text-green-600 cursor-pointer"
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          عرض التفاصيل
-                        </DropdownMenuItem>
+                    {/* زر التجديد */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`text-xs h-8 ${
+                        isSubscriptionExpired(member) ||
+                        (getDaysRemaining(member) &&
+                          getDaysRemaining(member)! <= 7)
+                          ? "text-orange-600 border-orange-200 hover:bg-orange-50 animate-pulse"
+                          : "text-amber-600 border-amber-200 hover:bg-amber-50"
+                      }`}
+                      onClick={() => handleRenewSubscription(member)}
+                    >
+                      <Calendar className="h-3 w-3 mr-1" />
+                      تجديد
+                    </Button>
 
-                        <DropdownMenuItem
-                          onClick={() =>
-                            navigate(
-                              `/dashboard/nutrition-recommendation/${member.id}`,
-                            )
-                          }
-                          className="text-orange-600 cursor-pointer bg-gradient-to-r from-orange-50 to-amber-50 focus:from-orange-100 focus:to-amber-100 font-medium border-b border-orange-200"
-                        >
-                          <div className="flex items-center">
-                            <ChefHat className="h-4 w-4 mr-2" />
-                            <Sparkles className="h-3 w-3 mr-1 animate-pulse" />
-                            <span>نظام غذائي ذكي ✨</span>
-                          </div>
-                        </DropdownMenuItem>
-
-                        <DropdownMenuSeparator />
-
-                        {(member.subscriptionEnd &&
-                          isSubscriptionExpired(member)) ||
-                        !member.subscriptionEnd ? (
-                          <DropdownMenuItem
-                            onClick={() => handleRenewSubscription(member)}
-                            className="text-green-600 cursor-pointer"
-                          >
-                            <Calendar className="h-4 w-4 mr-2" />
-                            تجديد الاشتراك
-                          </DropdownMenuItem>
-                        ) : (
-                          <DropdownMenuItem
-                            onClick={() => handleRenewSubscription(member)}
-                            className="text-blue-600 cursor-pointer"
-                          >
-                            <Calendar className="h-4 w-4 mr-2" />
-                            تمديد الاشتراك
-                          </DropdownMenuItem>
-                        )}
-
-                        <DropdownMenuSeparator />
-
-                        <DropdownMenuItem
-                          onClick={() => handleDeleteMember(member)}
-                          className="text-red-600 cursor-pointer focus:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          حذف العضو
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600 border-red-200 hover:bg-red-50 h-8 px-2 col-span-2"
+                      onClick={() => handleDeleteMember(member)}
+                    >
+                      <Trash2 className="h-3 w-3 mr-1" />
+                      حذف
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -1612,6 +1538,13 @@ export default function Members() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Official Print Template - Hidden in DOM but available for printing */}
+      <MemberPrintTemplateOfficial
+        member={members[0] || {}} // This will be dynamically updated during print
+        courses={courses}
+        dietPlans={dietPlans}
+      />
     </div>
   );
 }

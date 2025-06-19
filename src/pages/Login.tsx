@@ -12,7 +12,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dumbbell, Lock } from "lucide-react";
-import { login, GYM_ACCESS_CODE, GYM_NAME } from "@/lib/auth-new";
+import { login } from "@/lib/storage-new";
+
+const ACCESS_CODE = "112233";
 
 export default function Login() {
   const [code, setCode] = useState("");
@@ -28,8 +30,8 @@ export default function Login() {
     // Simulate authentication delay
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    const success = await login(code);
-    if (success) {
+    if (code === ACCESS_CODE) {
+      await login();
       navigate("/dashboard");
     } else {
       setError("رمز الدخول غير صحيح");
@@ -53,7 +55,7 @@ export default function Login() {
             </div>
           </div>
           <CardTitle className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
-            {GYM_NAME}
+            صالة حسام
           </CardTitle>
           <CardDescription className="text-lg text-gray-600 mt-2">
             لكمال الأجسام والرشاقة
@@ -106,7 +108,7 @@ export default function Login() {
 
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-500">
-              مرحباً بك في نظام إدارة {GYM_NAME}
+              مرحباً بك في نظام إدارة صالة حسام
             </p>
             <div className="flex justify-center items-center gap-2 mt-2 text-xs text-gray-400">
               <span>نظام ذكي ومتطور</span>

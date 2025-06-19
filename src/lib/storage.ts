@@ -191,8 +191,49 @@ export function saveSale(sale: Sale): void {
   saveToStorage(STORAGE_KEYS.SALES, sales);
 }
 
-// Initialize with sample data (removed - no demo data)
+// Initialize with sample data if empty
 export function initializeSampleData(): void {
-  // No demo data will be added automatically
-  console.log("Storage initialized - ready for real data");
+  if (getCourses().length === 0) {
+    const sampleCourses: Course[] = [
+      {
+        id: "1",
+        name: "تمارين كمال الأجسام المبتدئين",
+        createdAt: new Date(),
+      },
+      {
+        id: "2",
+        name: "تمارين القوة والتحمل",
+        createdAt: new Date(),
+      },
+      {
+        id: "3",
+        name: "تمارين اللياقة البدنية",
+        createdAt: new Date(),
+      },
+    ];
+
+    sampleCourses.forEach(saveCourse);
+  }
+
+  if (getDietPlans().length === 0) {
+    const sampleDietPlans: DietPlan[] = [
+      {
+        id: "1",
+        name: "نظام غذائي لزيادة الكتلة العضلية",
+        createdAt: new Date(),
+      },
+      {
+        id: "2",
+        name: "نظام غذائي لحرق الدهون",
+        createdAt: new Date(),
+      },
+      {
+        id: "3",
+        name: "نظام غذائي متوازن",
+        createdAt: new Date(),
+      },
+    ];
+
+    sampleDietPlans.forEach(saveDietPlan);
+  }
 }
