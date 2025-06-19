@@ -1,0 +1,63 @@
+{
+  "name": "صالة حسام لكمال الأجسام والرشاقة",
+  "short_name": "صالة حسام",
+  "description": "نظام إدارة صالة حسام لكمال الأجسام والرشاقة - إدارة الأعضاء والكورسات والأنظمة الغذائية",
+  "theme_color": "#f97316",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/",
+  "start_url": "/",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/placeholder.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/placeholder.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/placeholder.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/placeholder.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["business", "health", "fitness"],
+  "shortcuts": [
+    {
+      "name": "المشتركين",
+      "short_name": "المشتركين",
+      "description": "عرض قائمة المشتركين",
+      "url": "/dashboard/subscribers",
+      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "إضافة مشترك",
+      "short_name": "إضافة",
+      "description": "إضافة مشترك جديد",
+      "url": "/dashboard/add-subscriber",
+      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "المخزون",
+      "short_name": "المخزون",
+      "description": "إدارة المخزون والمبيعات",
+      "url": "/dashboard/inventory",
+      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
+    }
+  ]
+}
