@@ -1,120 +1,134 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Dumbbell, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Dumbbell, Lock } from "lucide-react";
-import { login, GYM_ACCESS_CODE, GYM_NAME } from "@/lib/auth-new";
+import { useAuth } from "@/lib/auth";
 
-export default function Login() {
+const Login = () => {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { authenticate } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setError("");
+    setIsLoading(true);
 
-    // Simulate authentication delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      // Simulate network delay
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const success = await login(code);
-    if (success) {
-      navigate("/dashboard");
-    } else {
-      setError("رمز الدخول غير صحيح");
+      const isValid = authenticate(code);
+
+      if (isValid) {
+        navigate("/");
+      } else {
+        setError("كود الدخول غير صحيح أو منتهي الصلاحية");
+      }
+    } catch (error) {
+      setError("حدث خطأ أثناء تسجيل الدخول");
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 flex items-center justify-center p-4">
-      <div
-        className={
-          'absolute inset-0 bg-[url(\'data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23f97316" fill-opacity="0.05"%3E%3Ccircle cx="30" cy="30" r="4"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\')] opacity-50'
-        }
-      ></div>
-
-      <Card className="w-full max-w-md relative z-10 shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
-        <CardHeader className="text-center pb-2">
-          <div className="flex justify-center mb-4">
-            <div className="p-4 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full shadow-lg">
-              <Dumbbell className="h-12 w-12 text-white" />
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-gym-primary to-gym-secondary flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Logo and title */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-white rounded-full shadow-lg mb-4">
+            <Dumbbell className="w-10 h-10 text-gym-primary" />
           </div>
-          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
-            {GYM_NAME}
-          </CardTitle>
-          <CardDescription className="text-lg text-gray-600 mt-2">
-            لكمال الأجسام والرشاقة
-          </CardDescription>
-        </CardHeader>
+          <h1 className="text-3xl font-bold text-white mb-2">حسام جم</h1>
+          <p className="text-white/80 text-lg">كمال الأجسام</p>
+        </div>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label
-                htmlFor="access-code"
-                className="text-right block text-gray-700 font-medium"
-              >
-                رمز الدخول
-              </Label>
-              <div className="relative">
+        {/* Login card */}
+        <Card className="shadow-2xl">
+          <CardHeader className="text-center">
+            <CardTitle className="flex items-center justify-center gap-2 text-xl">
+              <Lock className="w-5 h-5 text-gym-primary" />
+              دخول النظام
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription className="text-center">
+                    {error}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="code"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  كود الدخول الشهري
+                </label>
                 <Input
-                  id="access-code"
-                  type="password"
+                  id="code"
+                  type="text"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="أدخل رمز الدخول"
-                  className="text-center text-2xl font-mono tracking-widest h-14 border-2 border-gray-200 focus:border-orange-400 focus:ring-orange-400 bg-white/90"
-                  maxLength={6}
+                  placeholder="أدخل كود الدخول"
+                  className="text-center text-lg font-mono tracking-wider"
+                  disabled={isLoading}
                   required
                 />
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               </div>
-              <p className="text-sm text-gray-500 text-center">
-                أدخل الرمز المكون من 6 أرقام
+
+              <Button
+                type="submit"
+                className="w-full gym-button text-lg py-6"
+                disabled={isLoading || !code.trim()}
+              >
+                {isLoading ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    جاري التحقق...
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span>دخول النظام</span>
+                    <ArrowRight className="w-5 h-5" />
+                  </div>
+                )}
+              </Button>
+            </form>
+
+            {/* Demo info */}
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-sm text-blue-700 text-center">
+                <strong>للتجربة:</strong> استخدم الكود{" "}
+                <code className="bg-blue-100 px-2 py-1 rounded font-mono">
+                  GYM2024
+                </code>
               </p>
             </div>
+          </CardContent>
+        </Card>
 
-            {error && (
-              <Alert className="border-red-200 bg-red-50">
-                <AlertDescription className="text-red-700 text-right">
-                  {error}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <Button
-              type="submit"
-              className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg transition-all duration-200 transform hover:scale-105"
-              disabled={isLoading}
-            >
-              {isLoading ? "جاري التحقق..." : "دخول"}
-            </Button>
-          </form>
-
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-500">
-              مرحباً بك في نظام إدارة {GYM_NAME}
-            </p>
-            <div className="flex justify-center items-center gap-2 mt-2 text-xs text-gray-400">
-              <span>نظام ذكي ومتطور</span>
-              <Dumbbell className="h-3 w-3" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Footer */}
+        <div className="text-center mt-8">
+          <p className="text-white/60 text-sm">
+            نظام إدارة شامل للصالات الرياضية
+          </p>
+          <p className="text-white/40 text-xs mt-2">
+            يعمل بدون إنترنت • تطبيق سطح مكتب
+          </p>
+        </div>
+      </div>
     </div>
   );
-}
+};
+
+export default Login;

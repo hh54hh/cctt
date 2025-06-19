@@ -2,36 +2,50 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/placeholder.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#DC2626" />
     <meta
       name="description"
-      content="نظام إدارة صالة حسام لكمال الأجسام والرشاقة - إدارة الأعضاء والكورسات والأنظمة الغذائية"
+      content="نظام إدارة شامل للصالات الرياضية - حسام جم كمال الأجسام"
     />
-    <meta
-      name="keywords"
-      content="صالة, رياضة, كمال الأجسام, رشاقة, حسام, نظام إدارة"
-    />
-    <meta name="author" content="صالة حسام" />
-    <meta name="theme-color" content="#f97316" />
 
-    <!-- PWA Manifest -->
+    <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
-
-    <!-- Apple Touch Icon -->
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="صالة حسام" />
+    <meta name="apple-mobile-web-app-title" content="حسام جم" />
 
-    <!-- Microsoft Tiles -->
-    <meta name="msapplication-TileImage" content="/icon-512.png" />
-    <meta name="msapplication-TileColor" content="#f97316" />
+    <!-- Arabic fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Tajawal:wght@300;400;500;700&display=swap"
+      rel="stylesheet"
+    />
 
-    <title>صالة حسام لكمال الأجسام والرشاقة</title>
+    <title>حسام جم - كمال الأجسام</title>
   </head>
+
   <body>
     <div id="root"></div>
+
     <script type="module" src="/src/main.tsx"></script>
+
+    <!-- PWA registration -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              console.log("SW registered: ", registration);
+            })
+            .catch((registrationError) => {
+              console.log("SW registration failed: ", registrationError);
+            });
+        });
+      }
+    </script>
   </body>
 </html>

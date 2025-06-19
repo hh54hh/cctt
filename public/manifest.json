@@ -1,62 +1,42 @@
 {
-  "name": "صالة حسام لكمال الأجسام والرشاقة",
-  "short_name": "صالة حسام",
-  "description": "نظام إدارة صالة حسام لكمال الأجسام والرشاقة - إدارة الأعضاء والكورسات والأنظمة الغذائية",
-  "theme_color": "#f97316",
-  "background_color": "#ffffff",
-  "display": "standalone",
-  "orientation": "portrait",
-  "scope": "/",
+  "name": "حسام جم - كمال الأجسام",
+  "short_name": "حسام جم",
+  "description": "نظام إدارة شامل للصالات الرياضية",
   "start_url": "/",
-  "lang": "ar",
+  "display": "standalone",
+  "background_color": "#DC2626",
+  "theme_color": "#DC2626",
+  "orientation": "portrait-primary",
   "dir": "rtl",
+  "lang": "ar",
   "icons": [
     {
       "src": "/placeholder.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/placeholder.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     },
     {
       "src": "/placeholder.svg",
       "sizes": "512x512",
       "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/placeholder.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "health", "fitness"],
+  "categories": ["health", "fitness", "business"],
   "shortcuts": [
     {
-      "name": "المشتركين",
-      "short_name": "المشتركين",
-      "description": "عرض قائمة المشتركين",
-      "url": "/dashboard/subscribers",
-      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
-    },
-    {
       "name": "إضافة مشترك",
-      "short_name": "إضافة",
-      "description": "إضافة مشترك جديد",
-      "url": "/dashboard/add-subscriber",
+      "short_name": "مشترك جديد",
+      "description": "إضافة عضو جديد",
+      "url": "/add-member",
       "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
     },
     {
-      "name": "المخزون",
-      "short_name": "المخزون",
-      "description": "إدارة المخزون والمبيعات",
-      "url": "/dashboard/inventory",
+      "name": "المشتركين",
+      "short_name": "الأعضاء",
+      "description": "عرض جميع الأعضاء",
+      "url": "/members",
       "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
     }
   ]
