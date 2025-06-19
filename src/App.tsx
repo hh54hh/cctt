@@ -7,7 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 // Import offline support
-import { initializeOfflineSupport } from "@/lib/offline-storage";
+import { initializeOfflineSupport } from "@/lib/database-offline";
 
 // Pages
 import Login from "./pages/Login";

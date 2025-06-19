@@ -20,7 +20,7 @@ import {
   onConnectionChange,
   isOnline,
 } from "@/lib/database-offline";
-import { OfflineStorage } from "@/lib/offline-storage";
+// OfflineStorage functionality integrated into database-offline
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
