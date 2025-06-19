@@ -1,235 +1,189 @@
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Users,
-  UserPlus,
+  Plus,
   GraduationCap,
   Apple,
-  Package,
+  ShoppingCart,
   LogOut,
-  Dumbbell,
   Menu,
   X,
-  Settings,
-  Download,
-  FileText,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import {
-  logout,
-  getMembers,
-  getCourses,
-  getDietPlans,
-} from "@/lib/storage-new";
-import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { logout } from "@/lib/auth";
+import { offlineManager } from "@/lib/offline-manager";
 
-const navigation = [
-  { name: "الأعضاء", href: "/dashboard", icon: Users },
-  { name: "إضافة مشترك", href: "/dashboard/add-member", icon: UserPlus },
-  { name: "الكورسات", href: "/dashboard/courses", icon: GraduationCap },
-  { name: "الأنظمة الغذائية", href: "/dashboard/diet-plans", icon: Apple },
-  { name: "المخزن", href: "/dashboard/inventory", icon: Package },
-];
+interface LayoutProps {
+  children: ReactNode;
+}
 
-export default function Layout() {
-  const navigate = useNavigate();
+export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [pendingOps, setPendingOps] = useState(0);
 
-  const handleLogout = async () => {
-    await logout();
+  // Function to actually test internet connectivity
+  const testActualConnectivity = async (): Promise<boolean> => {
+    if (!navigator.onLine) {
+      return false;
+    }
+
+    try {
+      // Test with a small request to check actual internet connectivity
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const response = await fetch("https://httpbin.org/get", {
+        method: "HEAD",
+        mode: "no-cors",
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return true;
+    } catch (error) {
+      console.log("Connectivity test failed:", error);
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    const handleOnline = async () => {
+      // Double-check with actual connectivity test
+      const actuallyOnline = await testActualConnectivity();
+      setIsOnline(actuallyOnline);
+
+      if (actuallyOnline) {
+        offlineManager.syncPendingOperations();
+      }
+    };
+
+    const handleOffline = () => setIsOnline(false);
+
+    const updatePendingOps = async () => {
+      const ops = await offlineManager.getPendingOperations();
+      setPendingOps(ops.length);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("dataRefreshNeeded", updatePendingOps);
+
+    // Initial connectivity check
+    const initialConnectivityCheck = async () => {
+      const actuallyOnline = await testActualConnectivity();
+      setIsOnline(actuallyOnline);
+    };
+
+    initialConnectivityCheck();
+
+    // Check pending operations periodically
+    updatePendingOps();
+    const pendingOpsInterval = setInterval(updatePendingOps, 30000); // Every 30 seconds
+
+    // Periodic connectivity check (every 2 minutes when navigator says we're online)
+    const connectivityInterval = setInterval(async () => {
+      if (navigator.onLine) {
+        const actuallyOnline = await testActualConnectivity();
+        setIsOnline(actuallyOnline);
+      }
+    }, 120000); // Every 2 minutes
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("dataRefreshNeeded", updatePendingOps);
+      clearInterval(pendingOpsInterval);
+      clearInterval(connectivityInterval);
+    };
+  }, []);
+
+  const handleLogout = () => {
+    logout();
     navigate("/login");
   };
 
-  const handleBackupDownload = async () => {
-    try {
-      const [members, courses, dietPlans] = await Promise.all([
-        getMembers(),
-        getCourses(),
-        getDietPlans(),
-      ]);
-
-      const backupData = {
-        members,
-        courses,
-        dietPlans,
-        exportDate: new Date().toISOString(),
-        version: "1.0",
-      };
-
-      const dataStr = JSON.stringify(backupData, null, 2);
-      const dataBlob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(dataBlob);
-
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `gym-backup-${new Date().toISOString().split("T")[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error creating backup:", error);
-      alert("حدث خطأ أثناء إنشاء النسخة الاحتياطية");
-    }
-  };
-
-  const handleBackupPrint = async () => {
-    try {
-      const [members, courses, dietPlans] = await Promise.all([
-        getMembers(),
-        getCourses(),
-        getDietPlans(),
-      ]);
-
-      const printWindow = window.open("", "_blank");
-      if (!printWindow) return;
-
-      const html = `
-        <!DOCTYPE html>
-        <html dir="rtl" lang="ar">
-        <head>
-          <meta charset="UTF-8">
-          <title>النسخة الاحتياطية - صالة حسام</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
-            .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #000; padding-bottom: 20px; }
-            .section { margin-bottom: 30px; page-break-inside: avoid; }
-            .section-title { background: #f5f5f5; padding: 10px; border: 1px solid #000; font-weight: bold; font-size: 18px; }
-            .item { border: 1px solid #ccc; padding: 10px; margin: 5px 0; }
-            .member-info { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-            .member-courses, .member-diets { margin-top: 10px; }
-            @media print { body { font-size: 12px; } .header { page-break-after: avoid; } }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>النسخة الاحتياطية الكاملة - صالة حسام لكمال الأجسام والرشاقة</h1>
-            <p>تاريخ الإنشاء: ${new Date().toLocaleDateString("ar-SA")}</p>
-          </div>
-
-          <div class="section">
-            <div class="section-title">الأعضاء (${members.length})</div>
-            ${members
-              .map(
-                (member) => `
-              <div class="item">
-                <div class="member-info">
-                  <div><strong>الاسم:</strong> ${member.name}</div>
-                  <div><strong>الهاتف:</strong> ${member.phone}</div>
-                  <div><strong>العمر:</strong> ${member.age}</div>
-                  <div><strong>تاريخ الانضمام:</strong> ${new Date(member.createdAt).toLocaleDateString("ar-SA")}</div>
-                </div>
-                ${
-                  member.courses && member.courses.length > 0
-                    ? `
-                  <div class="member-courses">
-                    <strong>الكورسات:</strong> ${member.courses
-                      .map(
-                        (courseId) =>
-                          courses.find((c) => c.id === courseId)?.name ||
-                          courseId,
-                      )
-                      .join(", ")}
-                  </div>
-                `
-                    : ""
-                }
-                ${
-                  member.dietPlans && member.dietPlans.length > 0
-                    ? `
-                  <div class="member-diets">
-                    <strong>الأنظمة الغذائية:</strong> ${member.dietPlans
-                      .map(
-                        (dietId) =>
-                          dietPlans.find((d) => d.id === dietId)?.name ||
-                          dietId,
-                      )
-                      .join(", ")}
-                  </div>
-                `
-                    : ""
-                }
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-
-          <div class="section">
-            <div class="section-title">الكورسات (${courses.length})</div>
-            ${courses
-              .map(
-                (course) => `
-              <div class="item">
-                <strong>${course.name}</strong> - أضيف في ${new Date(course.createdAt).toLocaleDateString("ar-SA")}
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-
-          <div class="section">
-            <div class="section-title">الأنظمة الغذائية (${dietPlans.length})</div>
-            ${dietPlans
-              .map(
-                (diet) => `
-              <div class="item">
-                <strong>${diet.name}</strong> - أضيف في ${new Date(diet.createdAt).toLocaleDateString("ar-SA")}
-              </div>
-            `,
-              )
-              .join("")}
-          </div>
-
-          <div style="text-align: center; margin-top: 40px; font-size: 10px; color: #666;">
-            صمم البرنامج بواسطة حمزه احمد للتواصل واتساب ٠٧٨٠٠٦٥٧٨٢٢
-          </div>
-        </body>
-        </html>
-      `;
-
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      printWindow.print();
-    } catch (error) {
-      console.error("Error creating backup print:", error);
-      alert("حدث خطأ أثناء إنشاء نسخة الطباعة");
-    }
-  };
-
-  const isActivePath = (href: string) => {
-    if (href === "/dashboard") {
-      return (
-        location.pathname === "/dashboard" ||
-        location.pathname === "/dashboard/members"
-      );
-    }
-    return location.pathname === href;
-  };
+  const navigation = [
+    {
+      name: "المشتركين",
+      href: "/dashboard/members",
+      icon: Users,
+      current: location.pathname === "/dashboard/members",
+    },
+    {
+      name: "إضافة مشترك",
+      href: "/dashboard/add-member",
+      icon: Plus,
+      current: location.pathname === "/dashboard/add-member",
+    },
+    {
+      name: "الكورسات",
+      href: "/dashboard/courses",
+      icon: GraduationCap,
+      current: location.pathname === "/dashboard/courses",
+    },
+    {
+      name: "الأنظمة الغذائية",
+      href: "/dashboard/diet-plans",
+      icon: Apple,
+      current: location.pathname === "/dashboard/diet-plans",
+    },
+    {
+      name: "المبيعات",
+      href: "/dashboard/inventory",
+      icon: ShoppingCart,
+      current: location.pathname === "/dashboard/inventory",
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
+      {/* Online/Offline Status Bar */}
+      {!isOnline && (
+        <div
+          className="bg-amber-500 text-white text-center py-2 px-4 text-sm font-medium"
+          dir="rtl"
+        >
+          <div className="flex items-center justify-center gap-2">
+            <WifiOff className="h-4 w-4" />
+            <span>وضع عدم الاتصال - البيانات محفوظة محلياً</span>
+            {pendingOps > 0 && (
+              <span className="bg-amber-600 px-2 py-1 rounded-full text-xs">
+                {pendingOps} عملية معلقة
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {isOnline && pendingOps > 0 && (
+        <div
+          className="bg-blue-500 text-white text-center py-2 px-4 text-sm font-medium"
+          dir="rtl"
+        >
+          <div className="flex items-center justify-center gap-2">
+            <Wifi className="h-4 w-4 animate-pulse" />
+            <span>جاري مزامنة {pendingOps} عملية معلقة...</span>
+          </div>
+        </div>
+      )}
+
       <header className="bg-white shadow-lg border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
+            {/* Logo and Title */}
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-r from-orange-500 to-amber-500 rounded-lg">
-                <Dumbbell className="h-6 w-6 text-white" />
-              </div>
-              <div className="text-right">
+              <img
+                src="https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=80"
+                alt="شعار صالة حسام"
+                className="w-12 h-12 rounded-full object-cover border-2 border-orange-400 shadow-md"
+              />
+              <div>
                 <h1 className="text-xl font-bold text-gray-900">صالة حسام</h1>
                 <p className="text-sm text-gray-600">لكمال الأجسام والرشاقة</p>
               </div>
@@ -239,147 +193,112 @@ export default function Layout() {
             <nav className="hidden md:flex items-center gap-2">
               {navigation.map((item) => {
                 const Icon = item.icon;
-                const isActive = isActivePath(item.href);
                 return (
-                  <Button
-                    key={item.name}
-                    variant={isActive ? "default" : "ghost"}
-                    className={cn(
-                      "flex items-center gap-2 text-sm font-medium transition-all duration-200",
-                      isActive
-                        ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md"
-                        : "text-gray-700 hover:text-orange-600 hover:bg-orange-50",
-                    )}
-                    onClick={() => navigate(item.href)}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.name}
-                  </Button>
+                  <Link key={item.name} to={item.href}>
+                    <Button
+                      variant={item.current ? "default" : "ghost"}
+                      className={`flex items-center gap-2 ${
+                        item.current
+                          ? "bg-orange-500 text-white hover:bg-orange-600"
+                          : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{item.name}</span>
+                    </Button>
+                  </Link>
                 );
               })}
-            </nav>
-
-            {/* Actions */}
-            <div className="flex items-center gap-3">
-              {/* Settings Dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="hidden sm:flex items-center gap-2 text-gray-700 border-gray-300 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
-                  >
-                    <Settings className="h-4 w-4" />
-                    الضبط
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onClick={handleBackupDownload}>
-                    <Download className="h-4 w-4 mr-2" />
-                    تنزيل نسخة احتياطية (JSON)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleBackupPrint}>
-                    <FileText className="h-4 w-4 mr-2" />
-                    طباعة النسخة الاحتياطية
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
               <Button
                 variant="outline"
-                size="sm"
                 onClick={handleLogout}
-                className="hidden sm:flex items-center gap-2 text-gray-700 border-gray-300 hover:bg-red-50 hover:border-red-300 hover:text-red-600"
+                className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 ml-2"
               >
-                <LogOut className="h-4 w-4" />
-                خروج
+                <LogOut className="w-4 h-4 ml-2" />
+                تسجيل الخروج
               </Button>
+            </nav>
 
-              {/* Mobile menu button */}
+            {/* Mobile menu button */}
+            <div className="md:hidden">
               <Button
                 variant="ghost"
-                size="sm"
-                className="md:hidden"
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="text-gray-700"
               >
-                {isMobileMenuOpen ? (
-                  <X className="h-5 w-5" />
+                {mobileMenuOpen ? (
+                  <X className="w-6 h-6" />
                 ) : (
-                  <Menu className="h-5 w-5" />
+                  <Menu className="w-6 h-6" />
                 )}
               </Button>
             </div>
           </div>
-        </div>
 
-        {/* Mobile Navigation */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 bg-white">
-            <div className="px-4 py-2 space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                const isActive = isActivePath(item.href);
-                return (
-                  <Button
-                    key={item.name}
-                    variant={isActive ? "default" : "ghost"}
-                    className={cn(
-                      "w-full justify-start gap-3 text-sm font-medium",
-                      isActive
-                        ? "bg-gradient-to-r from-orange-500 to-amber-500 text-white"
-                        : "text-gray-700 hover:text-orange-600 hover:bg-orange-50",
-                    )}
-                    onClick={() => {
-                      navigate(item.href);
-                      setIsMobileMenuOpen(false);
-                    }}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.name}
-                  </Button>
-                );
-              })}
-              <div className="pt-2 border-t border-gray-200 space-y-1">
+          {/* Mobile Navigation */}
+          {mobileMenuOpen && (
+            <div className="md:hidden border-t border-gray-200 py-4" dir="rtl">
+              <div className="space-y-2">
+                {navigation.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      <Button
+                        variant={item.current ? "default" : "ghost"}
+                        className={`w-full justify-start flex items-center gap-3 ${
+                          item.current
+                            ? "bg-orange-500 text-white"
+                            : "text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                        <span>{item.name}</span>
+                      </Button>
+                    </Link>
+                  );
+                })}
                 <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-3 text-blue-600 hover:bg-blue-50"
+                  variant="outline"
                   onClick={() => {
-                    handleBackupDownload();
-                    setIsMobileMenuOpen(false);
+                    handleLogout();
+                    setMobileMenuOpen(false);
                   }}
+                  className="w-full justify-start text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 mt-4"
                 >
-                  <Download className="h-4 w-4" />
-                  تنزيل نسخة احتياطية
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-3 text-green-600 hover:bg-green-50"
-                  onClick={() => {
-                    handleBackupPrint();
-                    setIsMobileMenuOpen(false);
-                  }}
-                >
-                  <FileText className="h-4 w-4" />
-                  طباعة النسخة الاحتياطية
-                </Button>
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-3 text-red-600 hover:bg-red-50"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="h-4 w-4" />
-                  خروج
+                  <LogOut className="w-5 h-5 ml-2" />
+                  تسجيل الخروج
                 </Button>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Outlet />
-      </main>
+      <main className="flex-1">{children}</main>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 py-4">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+            <img
+              src="https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=32"
+              alt="شعار صالة حسام"
+              className="w-6 h-6 rounded-full object-cover"
+            />
+            <span>صالة حسام لكمال الأجسام والرشاقة © 2025</span>
+            {!isOnline && (
+              <span className="text-amber-600 font-medium">
+                • وضع عدم الاتصال
+              </span>
+            )}
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,162 +1,217 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-
-// Pages
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
+import { useEffect } from "react";
 import Login from "./pages/Login";
+import Index from "./pages/Index";
 import Members from "./pages/Members";
 import AddMember from "./pages/AddMember";
 import AddMemberEnhanced from "./pages/AddMemberEnhanced";
 import Courses from "./pages/Courses";
+import CoursesEnhanced from "./pages/CoursesEnhanced";
 import DietPlans from "./pages/DietPlans";
+import DietPlansEnhanced from "./pages/DietPlansEnhanced";
 import Inventory from "./pages/Inventory";
+import InventoryEnhanced from "./pages/InventoryEnhanced";
 import NotFound from "./pages/NotFound";
-
-// Components
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { initOfflineSupport } from "./lib/offline-manager";
+import "./App.css";
 
-// Utils
-import { initializeDatabase } from "./lib/database";
-import { getAuthState } from "./lib/storage-new";
+function App() {
+  useEffect(() => {
+    // Initialize offline support
+    initOfflineSupport().catch(console.error);
 
-// Loading component
-const DatabaseLoading = () => (
-  <div className="min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-50 flex items-center justify-center">
-    <div className="text-center space-y-4">
-      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto"></div>
-      <h2 className="text-xl font-semibold text-gray-900">
-        جاري تهيئة قاعدة البيانات...
-      </h2>
-      <p className="text-gray-600">يرجى الانتظار قليلاً</p>
-    </div>
-  </div>
-);
-
-const DatabaseError = ({
-  error,
-  onRetry,
-}: {
-  error: string;
-  onRetry: () => void;
-}) => (
-  <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 flex items-center justify-center">
-    <div className="text-center space-y-4 max-w-md">
-      <div className="text-red-500 text-6xl">⚠️</div>
-      <h2 className="text-xl font-semibold text-gray-900">
-        خطأ في قاعدة البيانات
-      </h2>
-      <p className="text-gray-600">{error}</p>
-      <button
-        onClick={onRetry}
-        className="bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors"
-      >
-        إعادة المحاولة
-      </button>
-    </div>
-  </div>
-);
-
-const queryClient = new QueryClient();
-
-const App = () => {
-  const [isDBInitialized, setIsDBInitialized] = useState(false);
-  const [dbError, setDbError] = useState<string | null>(null);
-  const [authState, setAuthState] = useState<{
-    isAuthenticated: boolean;
-  } | null>(null);
-
-  const initializeApp = async () => {
-    try {
-      setDbError(null);
-      // Initialize database
-      await initializeDatabase();
-      setIsDBInitialized(true);
-
-      // Get auth state
-      const auth = await getAuthState();
-      setAuthState(auth);
-    } catch (error) {
-      console.error("Database initialization failed:", error);
-      setDbError(
-        error instanceof Error ? error.message : "فشل في تهيئة قاعدة البيانات",
+    // Add meta tags for mobile app
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+      viewport.setAttribute(
+        "content",
+        "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover",
       );
     }
-  };
 
-  useEffect(() => {
-    initializeApp();
+    // Add theme color
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (!themeColor) {
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      meta.content = "#f97316";
+      document.head.appendChild(meta);
+    }
+
+    // Add apple mobile web app capable
+    const appleMeta = document.querySelector(
+      'meta[name="apple-mobile-web-app-capable"]',
+    );
+    if (!appleMeta) {
+      const meta = document.createElement("meta");
+      meta.name = "apple-mobile-web-app-capable";
+      meta.content = "yes";
+      document.head.appendChild(meta);
+    }
+
+    // Add apple status bar style
+    const appleStatus = document.querySelector(
+      'meta[name="apple-mobile-web-app-status-bar-style"]',
+    );
+    if (!appleStatus) {
+      const meta = document.createElement("meta");
+      meta.name = "apple-mobile-web-app-status-bar-style";
+      meta.content = "default";
+      document.head.appendChild(meta);
+    }
+
+    // Add app title for Apple
+    const appleTitle = document.querySelector(
+      'meta[name="apple-mobile-web-app-title"]',
+    );
+    if (!appleTitle) {
+      const meta = document.createElement("meta");
+      meta.name = "apple-mobile-web-app-title";
+      meta.content = "صالة حسام";
+      document.head.appendChild(meta);
+    }
+
+    // Install prompt for PWA
+    let deferredPrompt: any;
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      deferredPrompt = e;
+
+      // Show install prompt after a delay
+      setTimeout(() => {
+        if (deferredPrompt && !localStorage.getItem("pwa-install-dismissed")) {
+          const shouldInstall = confirm(
+            "هل تريد تثبيت تطبيق صالة حسام على جهازك؟",
+          );
+          if (shouldInstall) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then((choiceResult: any) => {
+              if (choiceResult.outcome === "accepted") {
+                console.log("User accepted the install prompt");
+              } else {
+                console.log("User dismissed the install prompt");
+                localStorage.setItem("pwa-install-dismissed", "true");
+              }
+              deferredPrompt = null;
+            });
+          } else {
+            localStorage.setItem("pwa-install-dismissed", "true");
+          }
+        }
+      }, 5000); // Show after 5 seconds
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    // Listen for app installed
+    window.addEventListener("appinstalled", () => {
+      console.log("PWA was installed");
+      localStorage.removeItem("pwa-install-dismissed");
+    });
+
+    return () => {
+      window.removeEventListener(
+        "beforeinstallprompt",
+        handleBeforeInstallPrompt,
+      );
+    };
   }, []);
 
-  // Show loading while initializing database
-  if (!isDBInitialized && !dbError) {
-    return <DatabaseLoading />;
-  }
-
-  // Show error if database failed to initialize
-  if (dbError) {
-    return <DatabaseError error={dbError} onRetry={initializeApp} />;
-  }
-
-  // Show loading if auth state is not loaded yet
-  if (!authState) {
-    return <DatabaseLoading />;
-  }
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            {/* Redirect root to appropriate page based on auth */}
-            <Route
-              path="/"
-              element={
-                authState.isAuthenticated ? (
-                  <Navigate to="/dashboard" replace />
-                ) : (
-                  <Navigate to="/login" replace />
-                )
-              }
-            />
+    <Router>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/login" element={<Login />} />
 
-            {/* Login page */}
-            <Route path="/login" element={<Login />} />
+        {/* Protected Routes with Layout */}
+        <Route
+          path="/*"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route
+                    path="/dashboard"
+                    element={<Navigate to="/dashboard/members" replace />}
+                  />
 
-            {/* Protected dashboard routes */}
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Layout />
-                </ProtectedRoute>
-              }
-            >
-              {/* Default dashboard route goes to members */}
-              <Route index element={<Members />} />
-              <Route path="members" element={<Members />} />
-              <Route path="add-member" element={<AddMemberEnhanced />} />
-              <Route
-                path="add-member-enhanced"
-                element={<AddMemberEnhanced />}
-              />
-              <Route path="courses" element={<Courses />} />
-              <Route path="diet-plans" element={<DietPlans />} />
-              <Route path="inventory" element={<Inventory />} />
-            </Route>
+                  {/* Enhanced Pages (Primary) */}
+                  <Route path="/dashboard/members" element={<Members />} />
+                  <Route
+                    path="/dashboard/add-member"
+                    element={<AddMemberEnhanced />}
+                  />
+                  <Route
+                    path="/dashboard/courses"
+                    element={<CoursesEnhanced />}
+                  />
+                  <Route
+                    path="/dashboard/diet-plans"
+                    element={<DietPlansEnhanced />}
+                  />
+                  <Route
+                    path="/dashboard/inventory"
+                    element={<InventoryEnhanced />}
+                  />
 
-            {/* Catch all for 404 */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
+                  {/* Legacy Routes (Fallback) */}
+                  <Route
+                    path="/dashboard/add-member-basic"
+                    element={<AddMember />}
+                  />
+                  <Route
+                    path="/dashboard/courses-basic"
+                    element={<Courses />}
+                  />
+                  <Route
+                    path="/dashboard/diet-plans-basic"
+                    element={<DietPlans />}
+                  />
+                  <Route
+                    path="/dashboard/inventory-basic"
+                    element={<Inventory />}
+                  />
+
+                  {/* Redirect old routes */}
+                  <Route
+                    path="/members"
+                    element={<Navigate to="/dashboard/members" replace />}
+                  />
+                  <Route
+                    path="/add-member"
+                    element={<Navigate to="/dashboard/add-member" replace />}
+                  />
+                  <Route
+                    path="/courses"
+                    element={<Navigate to="/dashboard/courses" replace />}
+                  />
+                  <Route
+                    path="/diet-plans"
+                    element={<Navigate to="/dashboard/diet-plans" replace />}
+                  />
+                  <Route
+                    path="/inventory"
+                    element={<Navigate to="/dashboard/inventory" replace />}
+                  />
+
+                  {/* 404 */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </Router>
   );
-};
+}
 
 export default App;

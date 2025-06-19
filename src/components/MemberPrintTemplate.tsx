@@ -1,298 +1,179 @@
-import React from "react";
-import { Member, Course, DietPlan } from "@/lib/types";
-import GymLogo from "./GymLogo";
+import { SubscriberWithGroups } from "@/lib/gym-types";
+import { Button } from "@/components/ui/button";
+import { Printer } from "lucide-react";
 
 interface MemberPrintTemplateProps {
-  member: Member;
-  courses: Course[];
-  dietPlans: DietPlan[];
+  member: SubscriberWithGroups;
 }
 
-export const MemberPrintTemplate: React.FC<MemberPrintTemplateProps> = ({
+export default function MemberPrintTemplate({
   member,
-  courses,
-  dietPlans,
-}) => {
-  // Get course names from IDs
-  const getMemberCourses = () => {
-    const memberCourseIds = member.courses || [];
-    return courses.filter((course) => memberCourseIds.includes(course.id));
+}: MemberPrintTemplateProps) {
+  const handlePrint = () => {
+    window.print();
   };
 
-  // Get diet plan names from IDs
-  const getMemberDietPlans = () => {
-    const memberDietPlanIds = member.dietPlans || [];
-    return dietPlans.filter((diet) => memberDietPlanIds.includes(diet.id));
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("ar-SA", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
-
-  // Get course groups with course names
-  const getCourseGroupsWithNames = () => {
-    if (!member.courseGroups) return [];
-    return member.courseGroups.map((group) => ({
-      ...group,
-      courses: courses.filter((course) => group.courseIds.includes(course.id)),
-    }));
-  };
-
-  // Get diet plan groups with names
-  const getDietPlanGroupsWithNames = () => {
-    if (!member.dietPlanGroups) return [];
-    return member.dietPlanGroups.map((group) => ({
-      ...group,
-      dietPlans: dietPlans.filter((diet) =>
-        group.dietPlanIds.includes(diet.id),
-      ),
-    }));
-  };
-
-  const memberCourses = getMemberCourses();
-  const memberDietPlans = getMemberDietPlans();
-  const courseGroups = getCourseGroupsWithNames();
-  const dietPlanGroups = getDietPlanGroupsWithNames();
 
   return (
-    <div className="print-container" style={{ display: "none" }}>
-      <div
-        id="member-print-content"
-        className="bg-white p-8 font-arabic"
-        style={{
-          width: "210mm",
-          minHeight: "297mm",
-          margin: "0 auto",
-          fontSize: "14px",
-          lineHeight: "1.6",
-          direction: "rtl",
-          fontFamily: "Cairo, Tajawal, Arial, sans-serif",
-        }}
-      >
-        {/* Header with Logo and Gym Name */}
-        <div className="flex items-center justify-center mb-8 border-b-2 border-orange-500 pb-6">
+    <div className="max-w-4xl mx-auto">
+      {/* Print Button */}
+      <div className="mb-4 no-print">
+        <Button onClick={handlePrint} className="bg-blue-500 hover:bg-blue-600">
+          <Printer className="w-4 h-4 ml-2" />
+          طباعة
+        </Button>
+      </div>
+
+      {/* Print Content */}
+      <div className="print-content bg-white p-8" dir="rtl">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8 border-b-2 border-orange-500 pb-4">
           <div className="flex items-center gap-4">
-            <GymLogo size="lg" className="print:block" />
-            <div className="text-center">
-              <h1
-                className="text-3xl font-bold text-orange-600 mb-2"
-                style={{ fontSize: "28px", fontWeight: "bold" }}
-              >
-                صالة حسام لكمال الأجسام والرشاقة
-              </h1>
-              <p className="text-gray-600" style={{ fontSize: "16px" }}>
-                بطاقة عضوية - معلومات المشترك
+            <div className="w-16 h-16 bg-orange-500 rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-xl">صالة</span>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">صالة حسام</h1>
+              <p className="text-gray-600">لكمال الأجسام والرشاقة</p>
+            </div>
+          </div>
+          <div className="text-left">
+            <p className="text-gray-600">تاريخ الطباعة</p>
+            <p className="font-medium">
+              {formatDate(new Date().toISOString())}
+            </p>
+          </div>
+        </div>
+
+        {/* Title */}
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">خطة المشترك</h2>
+          <div className="w-24 h-1 bg-orange-500 mx-auto"></div>
+        </div>
+
+        {/* Member Info */}
+        <div className="mb-8">
+          <h3 className="text-xl font-bold text-gray-900 mb-4 bg-gray-100 p-3 rounded">
+            المعلومات الأساسية
+          </h3>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <div className="flex">
+                <span className="font-medium text-gray-700 w-24">الاسم:</span>
+                <span className="text-gray-900">{member.name}</span>
+              </div>
+              <div className="flex">
+                <span className="font-medium text-gray-700 w-24">العمر:</span>
+                <span className="text-gray-900">{member.age} سنة</span>
+              </div>
+              <div className="flex">
+                <span className="font-medium text-gray-700 w-24">الوزن:</span>
+                <span className="text-gray-900">{member.weight} كيلو</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div className="flex">
+                <span className="font-medium text-gray-700 w-24">الطول:</span>
+                <span className="text-gray-900">{member.height} سم</span>
+              </div>
+              <div className="flex">
+                <span className="font-medium text-gray-700 w-24">الهاتف:</span>
+                <span className="text-gray-900">{member.phone}</span>
+              </div>
+              <div className="flex">
+                <span className="font-medium text-gray-700 w-24">التاريخ:</span>
+                <span className="text-gray-900">
+                  {formatDate(member.created_at)}
+                </span>
+              </div>
+            </div>
+          </div>
+          {member.notes && (
+            <div className="mt-4">
+              <span className="font-medium text-gray-700">ملاحظات:</span>
+              <p className="text-gray-900 mt-1 bg-gray-50 p-3 rounded">
+                {member.notes}
               </p>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Member Personal Information */}
-        <div className="mb-8 bg-gray-50 p-6 rounded-lg">
-          <h2
-            className="text-2xl font-bold text-gray-800 mb-4 text-center"
-            style={{ fontSize: "22px", fontWeight: "bold" }}
-          >
-            المعلومات الشخصية
-          </h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <span className="font-semibold text-gray-700">الاسم:</span>
-              <span className="mr-2 text-gray-900 font-medium">
-                {member.name}
-              </span>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <span className="font-semibold text-gray-700">العمر:</span>
-              <span className="mr-2 text-gray-900 font-medium">
-                {member.age} سنة
-              </span>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <span className="font-semibold text-gray-700">الطول:</span>
-              <span className="mr-2 text-gray-900 font-medium">
-                {member.height} سم
-              </span>
-            </div>
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <span className="font-semibold text-gray-700">الوزن:</span>
-              <span className="mr-2 text-gray-900 font-medium">
-                {member.weight} كيلو
-              </span>
-            </div>
-          </div>
-          <div className="mt-4 bg-white p-4 rounded-lg shadow-sm">
-            <span className="font-semibold text-gray-700">تاريخ الانضمام:</span>
-            <span className="mr-2 text-gray-900 font-medium">
-              {new Date(member.createdAt).toLocaleDateString("en-GB")}
-            </span>
-          </div>
-        </div>
-
-        {/* Two Column Layout for Courses and Diet Plans */}
-        <div className="grid grid-cols-2 gap-8">
-          {/* Right Column - Courses */}
-          <div>
-            <h3
-              className="text-xl font-bold text-blue-700 mb-4 text-center border-b-2 border-blue-200 pb-2"
-              style={{ fontSize: "20px", fontWeight: "bold" }}
-            >
+        {/* Courses Section */}
+        {member.course_groups.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 bg-orange-100 p-3 rounded">
               الكورسات التدريبية
             </h3>
-
-            {/* Course Groups */}
-            {courseGroups.length > 0 && (
-              <div className="mb-6">
-                <h4 className="font-semibold text-gray-700 mb-3">
-                  المجموعات المخصصة:
-                </h4>
-                {courseGroups.map((group, index) => (
-                  <div
-                    key={group.id}
-                    className="mb-4 bg-blue-50 p-4 rounded-lg"
-                  >
-                    {group.title && (
+            <div className="space-y-4">
+              {member.course_groups.map((group, index) => (
+                <div
+                  key={group.id}
+                  className="border border-gray-200 rounded p-4"
+                >
+                  <h4 className="font-semibold text-orange-800 mb-3">
+                    {group.title || `مجموعة ${index + 1}`}
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    {group.items.map((item, itemIndex) => (
                       <div
-                        className="font-bold text-blue-800 mb-2"
-                        style={{ fontSize: "16px" }}
+                        key={item.id}
+                        className="text-sm p-2 bg-orange-50 rounded border border-orange-200"
                       >
-                        {group.title}
+                        <span className="font-medium">{itemIndex + 1}.</span>{" "}
+                        {item.name}
                       </div>
-                    )}
-                    <ul className="space-y-1">
-                      {group.courses.map((course, courseIndex) => (
-                        <li key={course.id} className="flex items-center">
-                          <span className="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm mr-2">
-                            {courseIndex + 1}
-                          </span>
-                          <span className="text-gray-800">{course.name}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Individual Courses (for backward compatibility) */}
-            {memberCourses.length > 0 && (
-              <div>
-                <h4 className="font-semibold text-gray-700 mb-3">
-                  الكورسات الفردية:
-                </h4>
-                <ul className="space-y-2">
-                  {memberCourses.map((course, index) => (
-                    <li
-                      key={course.id}
-                      className="flex items-center bg-blue-50 p-3 rounded-lg"
-                    >
-                      <span className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm mr-3">
-                        {index + 1}
-                      </span>
-                      <span className="text-gray-800 font-medium">
-                        {course.name}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {courseGroups.length === 0 && memberCourses.length === 0 && (
-              <p className="text-gray-500 text-center p-4 bg-gray-100 rounded-lg">
-                لم يتم تسجيل أي كورسات بعد
-              </p>
-            )}
+                </div>
+              ))}
+            </div>
           </div>
+        )}
 
-          {/* Left Column - Diet Plans */}
-          <div>
-            <h3
-              className="text-xl font-bold text-green-700 mb-4 text-center border-b-2 border-green-200 pb-2"
-              style={{ fontSize: "20px", fontWeight: "bold" }}
-            >
-              الأنظمة الغذائية
+        {/* Diet Section */}
+        {member.diet_groups.length > 0 && (
+          <div className="mb-8">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 bg-green-100 p-3 rounded">
+              النظام الغذائي
             </h3>
-
-            {/* Diet Plan Groups */}
-            {dietPlanGroups.length > 0 && (
-              <div className="mb-6">
-                <h4 className="font-semibold text-gray-700 mb-3">
-                  المجموعات المخصصة:
-                </h4>
-                {dietPlanGroups.map((group, index) => (
-                  <div
-                    key={group.id}
-                    className="mb-4 bg-green-50 p-4 rounded-lg"
-                  >
-                    {group.title && (
+            <div className="space-y-4">
+              {member.diet_groups.map((group, index) => (
+                <div
+                  key={group.id}
+                  className="border border-gray-200 rounded p-4"
+                >
+                  <h4 className="font-semibold text-green-800 mb-3">
+                    {group.title || `وجبة ${index + 1}`}
+                  </h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    {group.items.map((item, itemIndex) => (
                       <div
-                        className="font-bold text-green-800 mb-2"
-                        style={{ fontSize: "16px" }}
+                        key={item.id}
+                        className="text-sm p-2 bg-green-50 rounded border border-green-200"
                       >
-                        {group.title}
+                        <span className="font-medium">{itemIndex + 1}.</span>{" "}
+                        {item.name}
                       </div>
-                    )}
-                    <ul className="space-y-1">
-                      {group.dietPlans.map((diet, dietIndex) => (
-                        <li key={diet.id} className="flex items-center">
-                          <span className="w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center text-sm mr-2">
-                            {dietIndex + 1}
-                          </span>
-                          <span className="text-gray-800">{diet.name}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Individual Diet Plans (for backward compatibility) */}
-            {memberDietPlans.length > 0 && (
-              <div>
-                <h4 className="font-semibold text-gray-700 mb-3">
-                  الأنظمة الفردية:
-                </h4>
-                <ul className="space-y-2">
-                  {memberDietPlans.map((diet, index) => (
-                    <li
-                      key={diet.id}
-                      className="flex items-center bg-green-50 p-3 rounded-lg"
-                    >
-                      <span className="w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm mr-3">
-                        {index + 1}
-                      </span>
-                      <span className="text-gray-800 font-medium">
-                        {diet.name}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {dietPlanGroups.length === 0 && memberDietPlans.length === 0 && (
-              <p className="text-gray-500 text-center p-4 bg-gray-100 rounded-lg">
-                لم يتم تسجيل أي أنظمة غذائية بعد
-              </p>
-            )}
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Footer */}
-        <div className="mt-12 pt-6 border-t-2 border-gray-300 text-center">
-          <div className="grid grid-cols-3 gap-4 text-sm text-gray-600">
-            <div>
-              <p className="font-semibold">تاريخ الطباعة:</p>
-              <p>{new Date().toLocaleDateString("en-GB")}</p>
-            </div>
-            <div>
-              <p className="font-semibold text-orange-600">
-                صالة حسام للياقة البدنية
-              </p>
-              <p>نحو حياة صحية أفضل</p>
-            </div>
-            <div>
-              <p className="font-semibold">رقم العضوية:</p>
-              <p>#{member.id}</p>
-            </div>
+        <div className="text-center mt-12 pt-8 border-t border-gray-300">
+          <div className="text-gray-600">
+            <p className="font-medium">صالة حسام لكمال الأجسام والرشاقة</p>
+            <p className="text-sm mt-2">نظام إدارة احترافي للصالات الرياضية</p>
           </div>
         </div>
       </div>
@@ -300,33 +181,79 @@ export const MemberPrintTemplate: React.FC<MemberPrintTemplateProps> = ({
       {/* Print Styles */}
       <style jsx>{`
         @media print {
-          .print-container {
-            display: block !important;
+          .no-print {
+            display: none !important;
           }
-          #member-print-content {
-            width: 210mm;
-            min-height: 297mm;
-            margin: 0;
-            padding: 20mm;
-            font-size: 12px;
-            box-shadow: none;
-          }
-          .bg-gray-50,
-          .bg-blue-50,
-          .bg-green-50,
-          .bg-gray-100 {
-            background-color: #f9f9f9 !important;
-          }
-          .bg-white {
-            background-color: white !important;
-          }
-          .shadow-sm {
+
+          .print-content {
+            font-size: 12px !important;
+            margin: 0 !important;
+            padding: 1cm !important;
+            max-width: none !important;
+            width: 100% !important;
             box-shadow: none !important;
+          }
+
+          body {
+            background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            color-adjust: exact !important;
+            margin: 0 !important;
+          }
+
+          .bg-orange-100 {
+            background-color: #fed7aa !important;
+          }
+
+          .bg-green-100 {
+            background-color: #dcfce7 !important;
+          }
+
+          .bg-orange-50 {
+            background-color: #fff7ed !important;
+          }
+
+          .bg-green-50 {
+            background-color: #f0fdf4 !important;
+          }
+
+          .bg-gray-100 {
+            background-color: #f3f4f6 !important;
+          }
+
+          .bg-gray-50 {
+            background-color: #f9fafb !important;
+          }
+
+          .border-orange-500 {
+            border-color: #f97316 !important;
+          }
+
+          .border-orange-200 {
+            border-color: #fed7aa !important;
+          }
+
+          .border-green-200 {
+            border-color: #bbf7d0 !important;
+          }
+
+          .text-orange-800 {
+            color: #9a3412 !important;
+          }
+
+          .text-green-800 {
+            color: #166534 !important;
+          }
+
+          * {
+            page-break-inside: avoid;
+          }
+
+          .grid {
+            break-inside: avoid;
           }
         }
       `}</style>
     </div>
   );
-};
-
-export default MemberPrintTemplate;
+}

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>صالة حسام</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Cairo", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+        color: white;
+        overflow: hidden;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        direction: rtl;
+      }
+
+      .logo {
+        width: 120px;
+        height: 120px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 4px solid rgba(255, 255, 255, 0.3);
+        margin-bottom: 20px;
+        animation: pulse 2s infinite;
+        box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
+      }
+
+      .title {
+        font-size: 32px;
+        font-weight: 800;
+        margin-bottom: 8px;
+        text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        letter-spacing: 1px;
+      }
+
+      .subtitle {
+        font-size: 18px;
+        opacity: 0.9;
+        margin-bottom: 30px;
+        font-weight: 400;
+      }
+
+      .loading {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16px;
+        opacity: 0.8;
+      }
+
+      .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-top: 3px solid white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      .version {
+        position: absolute;
+        bottom: 20px;
+        font-size: 12px;
+        opacity: 0.7;
+      }
+
+      .features {
+        position: absolute;
+        bottom: 60px;
+        font-size: 13px;
+        opacity: 0.8;
+        line-height: 1.5;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.05);
+        }
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .fade-in {
+        animation: fadeIn 0.8s ease-out;
+      }
+
+      .progress-bar {
+        width: 200px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 2px;
+        margin-top: 20px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: white;
+        border-radius: 2px;
+        animation: progress 2s ease-in-out infinite;
+      }
+
+      @keyframes progress {
+        0% {
+          width: 0%;
+        }
+        50% {
+          width: 70%;
+        }
+        100% {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="fade-in">
+      <img
+        src="https://cdn.builder.io/api/v1/assets/f91a990b079c48309bb2a3ebf32314b6/photo_2025-06-17_16-27-55-183bb1?format=webp&width=240"
+        alt="شعار صالة حسام"
+        class="logo"
+      />
+
+      <h1 class="title">صالة حسام</h1>
+      <p class="subtitle">لكمال الأجسام والرشاقة</p>
+
+      <div class="loading">
+        <div class="spinner"></div>
+        <span>جاري تحميل التطبيق...</span>
+      </div>
+
+      <div class="progress-bar">
+        <div class="progress-fill"></div>
+      </div>
+    </div>
+
+    <div class="features">
+      إدارة المشتركين • الكورسات • الأنظمة الغذائية • المبيعات<br />
+      يعمل بدون انترنت • طباعة احترافية • واجهة عربية
+    </div>
+
+    <div class="version">الإصدار 1.0.0 - تطبيق سطح المكتب</div>
+
+    <script>
+      // Add some interactivity
+      let loadingTexts = [
+        "جاري تحميل التطبيق...",
+        "تحضير قاعدة البيانات...",
+        "تهيئة الواجهة...",
+        "التطبيق جاهز!",
+      ];
+
+      let currentIndex = 0;
+      const loadingElement = document.querySelector(".loading span");
+
+      setInterval(() => {
+        if (currentIndex < loadingTexts.length - 1) {
+          currentIndex++;
+          loadingElement.textContent = loadingTexts[currentIndex];
+        }
+      }, 500);
+
+      // Auto close after 2 seconds
+      setTimeout(() => {
+        document.body.style.opacity = "0";
+        document.body.style.transition = "opacity 0.5s ease-out";
+      }, 1800);
+    </script>
+  </body>
+</html>

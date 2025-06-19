@@ -1,9 +1,17 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,343 +23,527 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Apple,
   Plus,
-  Trash2,
   Search,
-  Save,
-  Utensils,
-  Users,
+  Edit,
+  Trash2,
   Calendar,
-  Heart,
+  AlertCircle,
+  CheckCircle,
 } from "lucide-react";
-import { DietPlan } from "@/lib/types";
+import { DietItem } from "@/lib/gym-types";
 import {
-  getDietPlans,
-  saveDietPlan,
-  deleteDietPlan,
-  getMembers,
-} from "@/lib/storage-new";
+  getDietItems,
+  createDietItem,
+  updateDietItem,
+  deleteDietItem,
+  searchDietItems,
+  initializeTables,
+} from "@/lib/gym-database";
+import DatabaseSetupWarning from "@/components/DatabaseSetupWarning";
 
 export default function DietPlans() {
-  const [dietPlans, setDietPlans] = useState<DietPlan[]>([]);
+  const [dietItems, setDietItems] = useState<DietItem[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [editingDietPlan, setEditingDietPlan] = useState<DietPlan | null>(null);
-  const [dietPlanToDelete, setDietPlanToDelete] = useState<DietPlan | null>(
-    null,
-  );
-  const [isLoading, setIsLoading] = useState(false);
-  const [followersCounts, setFollowersCounts] = useState<
-    Record<string, number>
-  >({});
+  const [itemToEdit, setItemToEdit] = useState<DietItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<DietItem | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
-  // Add new diet plan form state
-  const [newDietPlanName, setNewDietPlanName] = useState("");
-  const [error, setError] = useState("");
+  // Form data
+  const [formData, setFormData] = useState({
+    name: "",
+    description: "",
+  });
 
   useEffect(() => {
-    loadDietPlans();
+    loadDietItems();
   }, []);
 
-  const loadDietPlans = async () => {
+  useEffect(() => {
+    if (searchTerm) {
+      handleSearch();
+    } else {
+      loadDietItems();
+    }
+  }, [searchTerm]);
+
+  const loadDietItems = async () => {
     try {
-      const [dietPlansData, membersData] = await Promise.all([
-        getDietPlans(),
-        getMembers(),
-      ]);
+      setIsLoading(true);
+      setError(null);
+      setNeedsSetup(false);
 
-      // Ensure data is valid arrays
-      const validDietPlans = Array.isArray(dietPlansData) ? dietPlansData : [];
-      const validMembers = Array.isArray(membersData) ? membersData : [];
-
-      setDietPlans(validDietPlans);
-
-      // Calculate followers counts
-      const counts: Record<string, number> = {};
-      validDietPlans.forEach((dietPlan) => {
-        if (dietPlan && dietPlan.id) {
-          counts[dietPlan.id] = validMembers.filter(
-            (member) =>
-              member &&
-              Array.isArray(member.dietPlans) &&
-              member.dietPlans.includes(dietPlan.id),
-          ).length;
+      // Try to initialize tables first
+      try {
+        await initializeTables();
+      } catch (initError) {
+        if (
+          initError instanceof Error &&
+          initError.message === "TABLES_NOT_EXIST"
+        ) {
+          setNeedsSetup(true);
+          return;
         }
-      });
-      setFollowersCounts(counts);
+      }
+
+      const itemsData = await getDietItems();
+      setDietItems(itemsData);
     } catch (error) {
-      console.error("Error loading diet plans:", error);
-      setDietPlans([]);
-      setFollowersCounts({});
-    }
-  };
-
-  const filteredDietPlans = Array.isArray(dietPlans)
-    ? dietPlans.filter((diet) =>
-        diet?.name?.toLowerCase().includes(searchTerm.toLowerCase()),
-      )
-    : [];
-
-  const handleAddDietPlan = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!newDietPlanName.trim()) {
-      setError("يجب إدخال اسم النظام الغذائي");
-      return;
-    }
-
-    setIsLoading(true);
-    setError("");
-
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      const dietPlanData: DietPlan = {
-        id: Date.now().toString(),
-        name: newDietPlanName.trim(),
-        createdAt: new Date(),
-      };
-
-      await saveDietPlan(dietPlanData);
-      await loadDietPlans();
-      setNewDietPlanName("");
-    } catch (error) {
-      console.error("Error adding diet plan:", error);
+      console.error("Error loading diet items:", error);
+      if (
+        error instanceof Error &&
+        (error.message.includes("does not exist") ||
+          error.message.includes("relation") ||
+          error.message === "TABLES_NOT_EXIST")
+      ) {
+        setNeedsSetup(true);
+      } else {
+        setError("فشل في تحميل العناصر الغذائية");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleDeleteDietPlan = (dietPlan: DietPlan) => {
-    setDietPlanToDelete(dietPlan);
-    setDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (dietPlanToDelete) {
-      try {
-        await deleteDietPlan(dietPlanToDelete.id);
-        await loadDietPlans();
-        setDeleteDialogOpen(false);
-        setDietPlanToDelete(null);
-      } catch (error) {
-        console.error("Error deleting diet plan:", error);
-      }
+  const handleSearch = async () => {
+    try {
+      const searchResults = await searchDietItems(searchTerm);
+      setDietItems(searchResults);
+    } catch (error) {
+      console.error("Error searching diet items:", error);
+      setError("فشل في البحث عن العناصر الغذائية");
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-gradient-to-r from-orange-500 to-amber-500 rounded-lg">
-          <Apple className="h-6 w-6 text-white" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">الأنظمة الغذائية</h1>
-          <p className="text-gray-600">إضافة وإدارة الأنظمة الغذائية</p>
+  const handleAddItem = async () => {
+    if (!formData.name.trim()) {
+      setError("اسم العنصر الغذائي مطلوب");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await createDietItem(formData.name.trim(), formData.description.trim());
+      await loadDietItems();
+      setAddDialogOpen(false);
+      setFormData({ name: "", description: "" });
+      setSuccess("تم إضافة العنصر الغذائي بنجاح");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error("Error adding diet item:", error);
+      setError("فشل في إضافة العنصر الغذائي");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEditItem = async () => {
+    if (!itemToEdit || !formData.name.trim()) {
+      setError("اسم العنصر الغذائي مطلوب");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await updateDietItem(
+        itemToEdit.id,
+        formData.name.trim(),
+        formData.description.trim(),
+      );
+      await loadDietItems();
+      setEditDialogOpen(false);
+      setItemToEdit(null);
+      setFormData({ name: "", description: "" });
+      setSuccess("تم تحديث العنصر الغذائي بنجاح");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error("Error updating diet item:", error);
+      setError("فشل في تحديث العنصر الغذائي");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    if (!itemToDelete) return;
+
+    try {
+      setIsSaving(true);
+      await deleteDietItem(itemToDelete.id);
+      await loadDietItems();
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
+      setSuccess("تم حذف العنصر الغذائي بنجاح");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (error) {
+      console.error("Error deleting diet item:", error);
+      setError("فشل في حذف العنصر الغذائي");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const openEditDialog = (item: DietItem) => {
+    setItemToEdit(item);
+    setFormData({
+      name: item.name,
+      description: item.description || "",
+    });
+    setEditDialogOpen(true);
+  };
+
+  const openDeleteDialog = (item: DietItem) => {
+    setItemToDelete(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const resetForm = () => {
+    setFormData({ name: "", description: "" });
+    setError(null);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("ar-SA", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-500 mx-auto"></div>
+            <p className="mt-4 text-gray-600">جاري تحميل العناصر الغذائية...</p>
+          </div>
         </div>
       </div>
+    );
+  }
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Utensils className="h-5 w-5 text-green-600" />
+  if (needsSetup) {
+    return <DatabaseSetupWarning onRetry={loadDietItems} />;
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50" dir="rtl">
+      <div className="max-w-6xl mx-auto p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-green-500 rounded-full">
+                <Apple className="h-8 w-8 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">إجمالي الأنظمة</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {dietPlans.length}
+                <h1 className="text-3xl font-bold text-gray-900">
+                  الأنظمة الغذائية
+                </h1>
+                <p className="text-gray-600">
+                  إدارة مكتبة العناصر الغذائية والأطعمة
                 </p>
               </div>
             </div>
+            <Dialog
+              open={addDialogOpen}
+              onOpenChange={(open) => {
+                setAddDialogOpen(open);
+                if (!open) resetForm();
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                  size="lg"
+                >
+                  <Plus className="w-5 h-5 ml-2" />
+                  إضافة عنصر غذائي
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>��ضافة عنصر غذائي جديد</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="add-name">اسم العنصر الغذائي *</Label>
+                    <Input
+                      id="add-name"
+                      value={formData.name}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          name: e.target.value,
+                        }))
+                      }
+                      placeholder="مثال: بيض مسلوق، شوفان، دجاج..."
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="add-description">الوصف (اختياري)</Label>
+                    <Textarea
+                      id="add-description"
+                      value={formData.description}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          description: e.target.value,
+                        }))
+                      }
+                      placeholder="وصف مختصر للعنصر الغذائي..."
+                      rows={3}
+                    />
+                  </div>
+
+                  {error && (
+                    <Alert className="border-red-200 bg-red-50">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-700">
+                        {error}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setAddDialogOpen(false)}
+                    >
+                      إلغاء
+                    </Button>
+                    <Button
+                      onClick={handleAddItem}
+                      disabled={isSaving}
+                      className="bg-green-500 hover:bg-green-600"
+                    >
+                      {isSaving ? "جاري الحفظ..." : "إضافة"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Success Message */}
+          {success && (
+            <Alert className="mb-6 border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-700">
+                {success}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Error Message */}
+          {error && (
+            <Alert className="mb-6 border-red-200 bg-red-50">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-700">
+                {error}
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+
+        {/* Search Bar */}
+        <Card className="mb-6">
+          <CardContent className="p-4">
+            <div className="relative">
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="البحث عن عنصر غذائي..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pr-10 bg-white border-gray-200"
+              />
+            </div>
           </CardContent>
         </Card>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Add Diet Plan Form */}
-        <Card className="lg:col-span-1">
+        {/* Diet Items Table */}
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Plus className="h-5 w-5 text-green-600" />
-              إضافة نظام غذائي جديد
+            <CardTitle className="text-xl font-bold text-gray-900">
+              قائمة العناصر الغذائية ({dietItems.length})
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleAddDietPlan} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="dietPlanName" className="text-right block">
-                  اسم النظام الغذائي *
-                </Label>
-                <Input
-                  id="dietPlanName"
-                  value={newDietPlanName}
-                  onChange={(e) => {
-                    setNewDietPlanName(e.target.value);
-                    setError("");
-                  }}
-                  placeholder="مثال: نظام غذائي لحرق الدهون"
-                  className="text-right"
-                />
-                {error && (
-                  <p className="text-sm text-red-600 text-right">{error}</p>
+          <CardContent className="p-0">
+            {dietItems.length === 0 ? (
+              <div className="text-center py-16">
+                <Apple className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg mb-4">
+                  {searchTerm ? "لا توجد نتائج للبحث" : "لا توجد عناصر غذائية"}
+                </p>
+                {!searchTerm && (
+                  <Button
+                    onClick={() => setAddDialogOpen(true)}
+                    className="bg-green-500 hover:bg-green-600"
+                  >
+                    <Plus className="w-4 h-4 ml-2" />
+                    إضافة أ��ل عنصر غذائي
+                  </Button>
                 )}
               </div>
-
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    جاري الإضافة...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    إضافة النظام
-                  </>
-                )}
-              </Button>
-            </form>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">اسم العنصر</TableHead>
+                    <TableHead className="text-right">الوصف</TableHead>
+                    <TableHead className="text-right">تاريخ الإضافة</TableHead>
+                    <TableHead className="text-right">الإجراءات</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dietItems.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell className="text-gray-600">
+                        {item.description || "لا يوجد وصف"}
+                      </TableCell>
+                      <TableCell className="text-gray-500">
+                        {formatDate(item.created_at)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openEditDialog(item)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openDeleteDialog(item)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
-
-        {/* Diet Plans List */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Search */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="relative">
-                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="البحث في الأنظمة الغذائية..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pr-10 text-right"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Diet Plans List */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">قائمة الأنظمة الغذائية</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {filteredDietPlans.length === 0 ? (
-                <div className="text-center py-8">
-                  {dietPlans.length === 0 ? (
-                    <div className="space-y-4">
-                      <Apple className="h-12 w-12 text-gray-400 mx-auto" />
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900">
-                          لا توجد أنظمة غذائية حتى الآن
-                        </h3>
-                        <p className="text-gray-600 mt-1">
-                          ابدأ بإضافة أول نظام غذائي
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <Search className="h-12 w-12 text-gray-400 mx-auto" />
-                      <div>
-                        <h3 className="text-lg font-medium text-gray-900">
-                          لم يتم العثور على نتائج
-                        </h3>
-                        <p className="text-gray-600 mt-1">
-                          جرب تغيير كلمات البحث
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {filteredDietPlans.map((dietPlan) => {
-                    const followersCount = followersCounts[dietPlan.id] || 0;
-
-                    return (
-                      <div
-                        key={dietPlan.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                      >
-                        <div className="flex-1 text-right">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="font-medium text-gray-900">
-                                {dietPlan.name}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                أضيف في{" "}
-                                {new Date(
-                                  dietPlan.createdAt,
-                                ).toLocaleDateString("en-GB")}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant={
-                                  followersCount > 0 ? "default" : "secondary"
-                                }
-                                className={
-                                  followersCount > 0
-                                    ? "bg-green-100 text-green-700"
-                                    : "bg-gray-100 text-gray-600"
-                                }
-                              >
-                                <Heart className="h-3 w-3 mr-1" />
-                                {followersCount}
-                              </Badge>
-                            </div>
-                          </div>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteDietPlan(dietPlan)}
-                          className="text-red-600 border-red-200 hover:bg-red-50 mr-3"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </div>
+
+      {/* Edit Dialog */}
+      <Dialog
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) {
+            setItemToEdit(null);
+            resetForm();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تعديل العنصر الغذائي</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-name">اسم العنصر الغذائي *</Label>
+              <Input
+                id="edit-name"
+                value={formData.name}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                }
+                placeholder="اسم العنصر الغذائي"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-description">الوصف (اختياري)</Label>
+              <Textarea
+                id="edit-description"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
+                placeholder="وصف العنصر الغذائي..."
+                rows={3}
+              />
+            </div>
+
+            {error && (
+              <Alert className="border-red-200 bg-red-50">
+                <AlertCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-700">
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setEditDialogOpen(false)}
+              >
+                إلغاء
+              </Button>
+              <Button
+                onClick={handleEditItem}
+                disabled={isSaving}
+                className="bg-green-500 hover:bg-green-600"
+              >
+                {isSaving ? "جاري التحديث..." : "تحديث"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-right">
-              حذف النظام الغذائي
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-right">
-              هل أنت متأكد من حذف النظام الغذائي "{dietPlanToDelete?.name}"؟ لا
-              يمكن التراجع عن هذا الإجراء.
+            <AlertDialogTitle>تأكيد الحذف</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف العنصر الغذائي "{itemToDelete?.name}"؟ لا يمكن
+              التراجع عن هذا الإجراء.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2">
+          <AlertDialogFooter>
             <AlertDialogCancel>إلغاء</AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmDelete}
-              className="bg-red-600 hover:bg-red-700"
+              onClick={handleDeleteItem}
+              className="bg-red-500 hover:bg-red-600"
+              disabled={isSaving}
             >
-              حذف
+              {isSaving ? "جاري الحذف..." : "حذف"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

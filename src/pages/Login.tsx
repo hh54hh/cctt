@@ -12,7 +12,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dumbbell, Lock } from "lucide-react";
-import { login } from "@/lib/storage-new";
+import { login } from "@/lib/auth";
 
 const ACCESS_CODE = "112233";
 
