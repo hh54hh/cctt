@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>صالة حسام جم - غير متصل</title>
+    <style>
+      body {
+        font-family: "Cairo", "Noto Sans Arabic", sans-serif;
+        margin: 0;
+        padding: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #1e40af, #059669);
+        color: white;
+        text-align: center;
+        direction: rtl;
+      }
+      .container {
+        max-width: 400px;
+        padding: 2rem;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 1rem;
+        backdrop-filter: blur(10px);
+      }
+      .icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+      }
+      p {
+        margin-bottom: 2rem;
+        opacity: 0.9;
+      }
+      .retry-btn {
+        background: white;
+        color: #1e40af;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        font-weight: bold;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+      .retry-btn:hover {
+        background: #f3f4f6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon">📡</div>
+      <h1>غير متصل بالإنترنت</h1>
+      <p>
+        التطبيق يعمل في وضع عدم الاتصال. ستتم مزامنة البيانات عند عودة الاتصال.
+      </p>
+      <button class="retry-btn" onclick="window.location.reload()">
+        إعادة المحاولة
+      </button>
+    </div>
+
+    <script>
+      // Check for online status
+      window.addEventListener("online", () => {
+        window.location.reload();
+      });
+
+      // Auto-retry every 30 seconds
+      setInterval(() => {
+        if (navigator.onLine) {
+          window.location.reload();
+        }
+      }, 30000);
+    </script>
+  </body>
+</html>

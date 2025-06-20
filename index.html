@@ -2,37 +2,47 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#DC2626" />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1e40af" />
+    <meta name="background-color" content="#ffffff" />
+    <meta name="display" content="standalone" />
+    <meta name="orientation" content="portrait-primary" />
+
+    <!-- App Info -->
+    <meta name="application-name" content="صالة حسام جم" />
     <meta
       name="description"
-      content="نظام إدارة شامل للصالات الرياضية - حسام جم كمال الأجسام"
+      content="نظام إدارة متكامل لصالات الألعاب الرياضية مع دعم العمل بدون إنترنت"
     />
+    <meta name="keywords" content="صالة رياضية، إدارة، مشتركين، مخزن، بيع" />
+    <meta name="author" content="Hussam Gym Management System" />
 
-    <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- Apple PWA Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="حسام جم" />
+    <meta name="apple-mobile-web-app-title" content="صالة حسام جم" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
 
-    <!-- Arabic fonts -->
+    <!-- Microsoft PWA Meta Tags -->
+    <meta name="msapplication-TileColor" content="#1e40af" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+
+    <!-- Preload Critical Resources -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Tajawal:wght@300;400;500;700&display=swap"
-      rel="stylesheet"
-    />
 
-    <title>حسام جم - كمال الأجسام</title>
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <title>صالة حسام جم - نظام إدارة شامل</title>
   </head>
-
   <body>
     <div id="root"></div>
 
-    <script type="module" src="/src/main.tsx"></script>
-
-    <!-- PWA registration -->
+    <!-- Service Worker Registration -->
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {
@@ -40,12 +50,50 @@
             .register("/sw.js")
             .then((registration) => {
               console.log("SW registered: ", registration);
+
+              // Request background sync permission
+              if ("sync" in window.ServiceWorkerRegistration.prototype) {
+                return registration.sync.register("sync-offline-data");
+              }
             })
             .catch((registrationError) => {
               console.log("SW registration failed: ", registrationError);
             });
         });
       }
+
+      // Handle app install prompt
+      let deferredPrompt;
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+
+        // Show install button or banner
+        console.log("App can be installed");
+      });
+
+      // Handle app installed
+      window.addEventListener("appinstalled", (evt) => {
+        console.log("App was installed");
+      });
+
+      // Add to home screen for iOS
+      function addToHomeScreen() {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === "accepted") {
+              console.log("User accepted the install prompt");
+            }
+            deferredPrompt = null;
+          });
+        }
+      }
+
+      // Expose function globally
+      window.addToHomeScreen = addToHomeScreen;
     </script>
+
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

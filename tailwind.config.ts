@@ -18,9 +18,6 @@ export default {
       },
     },
     extend: {
-      fontFamily: {
-        arabic: ["Cairo", "Tajawal", "system-ui", "sans-serif"],
-      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -65,12 +62,13 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        // Gym theme colors
         gym: {
-          primary: "#DC2626", // Red-600
-          secondary: "#1F2937", // Gray-800
-          accent: "#F59E0B", // Amber-500
-          light: "#F3F4F6", // Gray-100
-          dark: "#111827", // Gray-900
+          primary: "#1e40af", // Blue 700
+          secondary: "#059669", // Emerald 600
+          accent: "#dc2626", // Red 600
+          dark: "#1f2937", // Gray 800
+          light: "#f8fafc", // Slate 50
         },
       },
       borderRadius: {
@@ -95,21 +93,19 @@ export default {
             height: "0",
           },
         },
-        "fade-in": {
-          from: {
-            opacity: "0",
-            transform: "translateY(10px)",
-          },
-          to: {
-            opacity: "1",
-            transform: "translateY(0)",
-          },
-        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "fade-in": "fade-in 0.3s ease-out",
+      },
+      fontFamily: {
+        arabic: [
+          "Cairo",
+          "Noto Sans Arabic",
+          "Amiri",
+          "system-ui",
+          "sans-serif",
+        ],
       },
     },
   },

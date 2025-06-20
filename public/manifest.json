@@ -1,43 +1,67 @@
 {
-  "name": "حسام جم - كمال الأجسام",
-  "short_name": "حسام جم",
-  "description": "نظام إدارة شامل للصالات الرياضية",
+  "name": "صالة حسام جم - نظام إدارة شامل",
+  "short_name": "صالة حس��م جم",
+  "description": "نظام إدارة متكامل لصالات الألعاب الرياضية مع دعم العمل بدون إنترنت",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#DC2626",
-  "theme_color": "#DC2626",
+  "background_color": "#ffffff",
+  "theme_color": "#1e40af",
   "orientation": "portrait-primary",
-  "dir": "rtl",
+  "categories": ["business", "fitness", "productivity"],
   "lang": "ar",
+  "dir": "rtl",
   "icons": [
     {
-      "src": "/placeholder.svg",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/placeholder.svg",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
-  "categories": ["health", "fitness", "business"],
-  "shortcuts": [
+  "screenshots": [
     {
-      "name": "إضافة مشترك",
-      "short_name": "مشترك جديد",
-      "description": "إضافة عضو جديد",
-      "url": "/add-member",
-      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
+      "src": "/screenshot1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
     },
     {
+      "src": "/screenshot2.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "shortcuts": [
+    {
       "name": "المشتركين",
-      "short_name": "الأعضاء",
-      "description": "عرض جميع الأعضاء",
-      "url": "/members",
-      "icons": [{ "src": "/placeholder.svg", "sizes": "96x96" }]
+      "short_name": "المشتركين",
+      "description": "عرض جميع المشتركين",
+      "url": "/subscribers",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "إضافة مشترك",
+      "short_name": "إضافة مشترك",
+      "description": "إضافة مشترك جديد",
+      "url": "/add-subscriber",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "المخزن",
+      "short_name": "المخزن",
+      "description": "إدارة المخزن والمبيعات",
+      "url": "/store",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

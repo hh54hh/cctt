@@ -1,56 +1,69 @@
-import { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { InstallBanner } from "@/components/ui/install-banner";
+import { OfflineIndicator } from "@/components/ui/offline-indicator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "@/lib/auth";
-import { db } from "@/lib/database";
-import { quickSupabaseCheck } from "@/lib/supabase-validator";
-import SyncNotifications from "@/components/SyncNotifications";
+import { authStore } from "@/lib/auth";
+import { syncService } from "@/lib/sync";
+import { indexedDBService } from "@/lib/indexeddb";
 
-// Pages
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import AddMember from "./pages/AddMember";
-import Members from "./pages/Members";
+import Home from "./pages/Home";
+import Subscribers from "./pages/Subscribers";
+import AddSubscriber from "./pages/AddSubscriber";
 import Courses from "./pages/Courses";
 import Diet from "./pages/Diet";
-import Products from "./pages/Products";
-import Print from "./pages/Print";
+import Store from "./pages/Store";
+import Layout from "./components/layout/Layout";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 // Protected Route Component
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated } = useAuth();
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const checkAuth = () => {
+      const authenticated = authStore.checkAuth();
+      setIsAuthenticated(authenticated);
+    };
+
+    checkAuth();
+    // Set up a listener for auth changes
+    const interval = setInterval(checkAuth, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (isAuthenticated === null) {
+    // Loading state
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
-};
+  return <Layout>{children}</Layout>;
+}
 
 const App = () => {
   useEffect(() => {
-    // Initialize database and validate Supabase
-    const initializeApp = async () => {
-      try {
-        // Check Supabase connection first
-        console.log("🚀 تهيئة نظام حسام جم...");
-        await quickSupabaseCheck();
-
-        // Initialize database with sample data
-        await db.initializeSampleData();
-        console.log("✅ تم تهيئة النظام بنجاح");
-      } catch (error) {
-        console.error("❌ خطأ في تهيئة النظام:", error);
+    // Initialize IndexedDB and sync service
+    indexedDBService.init().then(() => {
+      console.log("IndexedDB initialized");
+      // Trigger initial sync if online
+      if (navigator.onLine) {
+        syncService.syncData();
       }
-    };
-
-    initializeApp();
+    });
   }, []);
 
   return (
@@ -58,40 +71,35 @@ const App = () => {
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <SyncNotifications />
+        <InstallBanner />
+        <OfflineIndicator />
         <BrowserRouter>
           <Routes>
-            {/* Public Routes */}
             <Route path="/login" element={<Login />} />
-
-            {/* Protected Routes */}
             <Route
               path="/"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <Home />
                 </ProtectedRoute>
               }
             />
-
             <Route
-              path="/members"
+              path="/subscribers"
               element={
                 <ProtectedRoute>
-                  <Members />
+                  <Subscribers />
                 </ProtectedRoute>
               }
             />
-
             <Route
-              path="/add-member"
+              path="/add-subscriber"
               element={
                 <ProtectedRoute>
-                  <AddMember />
+                  <AddSubscriber />
                 </ProtectedRoute>
               }
             />
-
             <Route
               path="/courses"
               element={
@@ -100,7 +108,6 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-
             <Route
               path="/diet"
               element={
@@ -109,26 +116,14 @@ const App = () => {
                 </ProtectedRoute>
               }
             />
-
             <Route
-              path="/products"
+              path="/store"
               element={
                 <ProtectedRoute>
-                  <Products />
+                  <Store />
                 </ProtectedRoute>
               }
             />
-
-            <Route
-              path="/print/:memberId"
-              element={
-                <ProtectedRoute>
-                  <Print />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
