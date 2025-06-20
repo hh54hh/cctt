@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="نظام إدارة صالة حسام جم - إدارة المشتركين والكورسات والأنظمة الغذائية"
+    />
+    <meta name="keywords" content="صالة, جم, إدارة, مشتركين, كورسات, غذاء" />
+    <meta name="author" content="صالة حسام جم" />
+
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#16a34a" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="صالة حسام جم" />
+
+    <!-- Manifest -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/gym-icon-32.png" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="/gym-icon-192.png"
+    />
+    <link rel="apple-touch-icon" href="/gym-icon-192.png" />
+
+    <title>صالة حسام جم - نظام الإدارة</title>
+  </head>
+
+  <body>
+    <div id="root"></div>
+
+    <script type="module" src="/src/main.tsx"></script>
+
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js", {
+              scope: "/",
+            })
+            .then((registration) => {
+              console.log("SW registered: ", registration);
+
+              // Handle service worker updates
+              registration.addEventListener("updatefound", () => {
+                const newWorker = registration.installing;
+                if (newWorker) {
+                  newWorker.addEventListener("statechange", () => {
+                    if (
+                      newWorker.state === "installed" &&
+                      navigator.serviceWorker.controller
+                    ) {
+                      // New service worker available
+                      if (
+                        confirm(
+                          "تحديث جديد متاح للتطبيق. هل تريد إعادة التحميل؟",
+                        )
+                      ) {
+                        newWorker.postMessage({ type: "SKIP_WAITING" });
+                        window.location.reload();
+                      }
+                    }
+                  });
+                }
+              });
+            })
+            .catch((registrationError) => {
+              console.log("SW registration failed: ", registrationError);
+            });
+
+          // Handle service worker controller change
+          navigator.serviceWorker.addEventListener("controllerchange", () => {
+            window.location.reload();
+          });
+        });
+      }
+
+      // PWA Install prompt
+      let deferredPrompt;
+      window.addEventListener("beforeinstallprompt", (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+
+        // Show install banner after 3 seconds
+        setTimeout(() => {
+          if (
+            deferredPrompt &&
+            !window.matchMedia("(display-mode: standalone)").matches
+          ) {
+            const installBanner = document.createElement("div");
+            installBanner.innerHTML = `
+              <div style="position: fixed; bottom: 20px; left: 20px; right: 20px; background: #16a34a; color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); z-index: 9999; font-family: Cairo, sans-serif; text-align: center;">
+                <div style="margin-bottom: 10px;">📱 قم بتثبيت تطبيق صالة حسام جم</div>
+                <button onclick="installApp()" style="background: white; color: #16a34a; border: none; padding: 8px 16px; border-radius: 5px; margin-left: 10px; cursor: pointer; font-weight: bold;">تثبيت</button>
+                <button onclick="dismissInstall()" style="background: transparent; color: white; border: 1px solid white; padding: 8px 16px; border-radius: 5px; cursor: pointer;">لاحقاً</button>
+              </div>
+            `;
+            document.body.appendChild(installBanner);
+          }
+        }, 3000);
+      });
+
+      function installApp() {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === "accepted") {
+              console.log("User accepted the install prompt");
+            }
+            deferredPrompt = null;
+            dismissInstall();
+          });
+        }
+      }
+
+      function dismissInstall() {
+        const banner = document.querySelector('[style*="position: fixed"]');
+        if (banner) banner.remove();
+      }
+
+      // Handle app install
+      window.addEventListener("appinstalled", () => {
+        console.log("PWA was installed");
+        deferredPrompt = null;
+        dismissInstall();
+      });
+    </script>
+  </body>
+</html>
