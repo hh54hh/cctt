@@ -1,401 +1,382 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { Search, Plus, Users, Filter, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import {
-  Eye,
-  Trash2,
-  Printer,
-  Search,
-  Plus,
-  User,
-  Phone,
-  Weight,
-  Ruler,
-  Calendar,
-  StickyNote,
-  RefreshCw,
-} from "lucide-react";
-import { syncService } from "@/lib/sync";
-import { toast } from "sonner";
-import { format } from "date-fns";
-import { ar } from "date-fns/locale";
-import { DatabaseDiagnostics } from "@/components/diagnostics/DatabaseDiagnostics";
-import { usePrintSubscriber } from "@/components/print/SubscriberPrintTemplate";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import SubscriberCard from "@/components/SubscriberCard";
+import { Link } from "react-router-dom";
+import { db } from "@/lib/database";
 
-interface Subscriber {
-  id: string;
-  name: string;
-  age: number;
-  weight: number;
-  height: number;
-  phone: string;
-  notes?: string;
-  created_at: string;
-}
-
-interface SubscriberWithDetails extends Subscriber {
-  groups: Array<{
-    id: string;
-    title?: string;
-    type: "course" | "diet";
-    group_items: Array<{
-      id: string;
-      name: string;
-    }>;
-  }>;
-}
+// Initial mock data - will be replaced by localStorage data
+const initialMockSubscribers = [
+  {
+    id: "1",
+    name: "أحمد محمد علي",
+    age: 25,
+    weight: 75,
+    height: 180,
+    phone: "01234567890",
+    notes: "مبتدئ في الرياضة",
+    created_at: "2024-01-15T10:00:00Z",
+    courses: [
+      {
+        id: "c1",
+        name: "كورس المبتدئين",
+        exercises: ["تمرين الضغط", "تمرين العقلة", "تمرين القرفصاء"],
+      },
+    ],
+    diet: [
+      {
+        id: "d1",
+        name: "نظام زيادة الوزن",
+        items: ["البروتين", "الكربوهيدرات", "الفيتامينات"],
+      },
+    ],
+  },
+  {
+    id: "2",
+    name: "فاطمة أحمد سالم",
+    age: 30,
+    weight: 65,
+    height: 165,
+    phone: "01987654321",
+    notes: "تريد فقدان الوزن",
+    created_at: "2024-01-20T14:30:00Z",
+    courses: [
+      {
+        id: "c2",
+        name: "كورس الكارديو",
+        exercises: ["الجري", "السباحة", "الدراجة"],
+      },
+    ],
+    diet: [
+      {
+        id: "d2",
+        name: "نظام فقدان الوزن",
+        items: ["الخضروات", "البروتين الخفيف", "الفواكه"],
+      },
+    ],
+  },
+  {
+    id: "3",
+    name: "محمد حسن عبدالله",
+    age: 28,
+    weight: 85,
+    height: 175,
+    phone: "01555666777",
+    notes: "رياضي محترف",
+    created_at: "2024-02-01T09:15:00Z",
+    courses: [
+      {
+        id: "c3",
+        name: "كورس المتقدمين",
+        exercises: ["رفع الأثقال", "تمارين القوة", "التحمل"],
+      },
+      {
+        id: "c4",
+        name: "كورس اللياقة",
+        exercises: ["اليوغا", "البيلاتس", "التمدد"],
+      },
+    ],
+    diet: [
+      {
+        id: "d3",
+        name: "نظام بناء العضلات",
+        items: ["البروتين العالي", "الكرياتين", "الأحماض الأمينية"],
+      },
+    ],
+  },
+  {
+    id: "4",
+    name: "سارة عبدالرحمن",
+    age: 22,
+    weight: 58,
+    height: 160,
+    phone: "01444555666",
+    created_at: "2024-02-10T16:45:00Z",
+    courses: [],
+    diet: [],
+  },
+  {
+    id: "5",
+    name: "علي حسام الدين",
+    age: 35,
+    weight: 90,
+    height: 185,
+    phone: "01333444555",
+    notes: "يعاني من آلام الظهر",
+    created_at: "2024-02-15T11:20:00Z",
+    courses: [
+      {
+        id: "c5",
+        name: "كورس العلاج الطبيعي",
+        exercises: ["تمارين الظهر", "التقوية", "العلاج الطبيعي"],
+      },
+    ],
+    diet: [
+      {
+        id: "d4",
+        name: "نظام مضاد للالتهابات",
+        items: ["الأوميغا 3", "المكملات الطبيعية", "الخضروات الورقية"],
+      },
+    ],
+  },
+];
 
 export default function Subscribers() {
-  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
-  const [selectedSubscriber, setSelectedSubscriber] =
-    useState<SubscriberWithDetails | null>(null);
+  const [subscribers, setSubscribers] = useState(initialMockSubscribers);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
-  const { printSubscriber } = usePrintSubscriber();
+  const [sortBy, setSortBy] = useState("newest");
 
-  const fetchSubscribers = async () => {
+  // Function to reload subscribers
+  const reloadSubscribers = async () => {
     try {
-      const data = await syncService.getRecords("subscribers");
-      setSubscribers(data || []);
+      const subscribersData = await db.subscribers.toArray();
+
+      if (subscribersData.length > 0) {
+        // Load complete subscriber data with courses and diet
+        const enrichedSubscribers = await Promise.all(
+          subscribersData.map(async (subscriber) => {
+            // Get all groups for this subscriber
+            const subscriberGroups = await db.groups
+              .where("subscriber_id")
+              .equals(subscriber.id!)
+              .toArray();
+
+            const courses = [];
+            const diet = [];
+
+            // Process each group and get its items
+            for (const group of subscriberGroups) {
+              const groupItems = await db.groupItems
+                .where("group_id")
+                .equals(group.id!)
+                .toArray();
+
+              const items = groupItems.map((item) => item.name);
+
+              if (group.type === "course") {
+                courses.push({
+                  id: group.id!,
+                  name: group.name,
+                  exercises: items,
+                });
+              } else if (group.type === "diet") {
+                diet.push({
+                  id: group.id!,
+                  name: group.name,
+                  items: items,
+                });
+              }
+            }
+
+            return {
+              ...subscriber,
+              courses,
+              diet,
+            };
+          }),
+        );
+
+        setSubscribers(enrichedSubscribers);
+      } else {
+        setSubscribers([]);
+      }
     } catch (error) {
-      toast.error("خطأ في جلب بيانات المشتركين");
-    } finally {
-      setIsLoading(false);
+      console.error("Error reloading subscribers:", error);
     }
   };
 
-  const fetchSubscriberDetails = async (subscriberId: string) => {
-    setIsLoadingDetails(true);
-    try {
-      const data = await syncService.getSubscriberWithDetails(subscriberId);
-      setSelectedSubscriber(data);
-    } catch (error) {
-      toast.error("خطأ في جلب بيانات المشترك");
-    } finally {
-      setIsLoadingDetails(false);
-    }
-  };
-
-  const deleteSubscriber = async (subscriberId: string) => {
-    if (!confirm("هل أنت متأكد من حذف هذا المشترك؟")) return;
-
-    try {
-      await syncService.deleteRecord("subscribers", subscriberId);
-      toast.success("تم حذف المشترك بنجاح");
-      fetchSubscribers();
-    } catch (error) {
-      toast.error("خطأ في حذف المشترك");
-    }
-  };
-
-  const handlePrintSubscriber = () => {
-    if (!selectedSubscriber) return;
-    printSubscriber(selectedSubscriber);
-  };
-
-  const handleRefresh = () => {
-    setIsLoading(true);
-    syncService.forcSync().then(() => {
-      fetchSubscribers();
-    });
-  };
-
+  // Load subscribers on component mount
   useEffect(() => {
-    fetchSubscribers();
-
-    // Listen for sync completion
-    syncService.onSyncComplete(() => {
-      fetchSubscribers();
-    });
+    reloadSubscribers();
   }, []);
 
-  const filteredSubscribers = subscribers.filter(
-    (subscriber) =>
-      subscriber.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      subscriber.phone.includes(searchTerm),
-  );
-
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">المشتركين</h1>
-        </div>
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
+  const filteredAndSortedSubscribers = useMemo(() => {
+    let filtered = subscribers.filter((subscriber) =>
+      subscriber.name.toLowerCase().includes(searchTerm.toLowerCase()),
     );
-  }
+
+    switch (sortBy) {
+      case "newest":
+        filtered.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
+        break;
+      case "oldest":
+        filtered.sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        );
+        break;
+      case "name":
+        filtered.sort((a, b) => a.name.localeCompare(b.name, "ar"));
+        break;
+      case "age":
+        filtered.sort((a, b) => a.age - b.age);
+        break;
+      default:
+        break;
+    }
+
+    return filtered;
+  }, [subscribers, searchTerm, sortBy]);
+
+  const handleDeleteSubscriber = async (id: string) => {
+    try {
+      // Delete from database (cascading delete will handle groups and group_items)
+      await db.subscribers.delete(id);
+
+      // Update local state
+      const updatedSubscribers = subscribers.filter((sub) => sub.id !== id);
+      setSubscribers(updatedSubscribers);
+
+      // Also trigger sync for deletion
+      await db.syncQueue.add({
+        table_name: "subscribers",
+        record_id: id,
+        operation: "delete",
+        data: { id },
+        created_at: new Date().toISOString(),
+        retries: 0,
+      });
+    } catch (error) {
+      console.error("Error deleting subscriber:", error);
+    }
+  };
+
+  const stats = {
+    total: subscribers.length,
+    withCourses: subscribers.filter((s) => s.courses.length > 0).length,
+    withDiet: subscribers.filter((s) => s.diet.length > 0).length,
+  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">المشتركين</h1>
+        <div>
+          <h1 className="text-3xl font-bold">المشتركين</h1>
+          <p className="text-muted-foreground">
+            إدارة وعرض جميع المشتركين في الصالة
+          </p>
+        </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
+          <Button
+            variant="outline"
+            onClick={reloadSubscribers}
+            className="flex items-center gap-2"
+          >
             <RefreshCw className="w-4 h-4" />
             تحديث
           </Button>
-          <Button
-            asChild
-            className="bg-gradient-to-r from-blue-600 to-emerald-600"
-          >
-            <a href="/add-subscriber">
-              <Plus className="w-4 h-4 ml-2" />
+          <Link to="/add-subscriber">
+            <Button className="gym-button">
+              <Plus className="w-4 h-4 mr-2" />
               إضافة مشترك جديد
-            </a>
-          </Button>
+            </Button>
+          </Link>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-        <Input
-          placeholder="البحث في المشتركين..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pr-10"
-        />
+      {/* Subscriber-specific Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              إجمالي المشتركين
+            </CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">مع كورسات</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.withCourses}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              مع أنظمة غذائية
+            </CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.withDiet}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Subscribers List */}
-      <div className="space-y-4">
-        {filteredSubscribers.length === 0 ? (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <User className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                لا يوجد مشتركين
-              </h3>
-              <p className="text-gray-600 mb-4">ابدأ بإضافة أول مشترك لك</p>
-              <Button asChild>
-                <a href="/add-subscriber">إضافة مشترك جديد</a>
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="البحث عن مشترك..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pr-10"
+          />
+        </div>
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-full sm:w-48">
+            <Filter className="w-4 h-4 mr-2" />
+            <SelectValue placeholder="ترتيب حسب" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">الأحدث</SelectItem>
+            <SelectItem value="oldest">الأقدم</SelectItem>
+            <SelectItem value="name">الاسم</SelectItem>
+            <SelectItem value="age">العمر</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Subscribers Grid */}
+      {filteredAndSortedSubscribers.length === 0 ? (
+        <Card className="p-12 text-center">
+          <Users className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+          <h3 className="text-lg font-semibold mb-2">لا توجد مشتركين</h3>
+          <p className="text-muted-foreground mb-4">
+            {searchTerm
+              ? "لم يتم العثور على مشتركين مطابقين لبحثك"
+              : "ابدأ بإضافة مشتركين جدد إلى الصالة"}
+          </p>
+          {!searchTerm && (
+            <Link to="/add-subscriber">
+              <Button className="gym-button">
+                <Plus className="w-4 h-4 mr-2" />
+                إضافة أول مشترك
               </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredSubscribers.map((subscriber) => (
-            <Card
+            </Link>
+          )}
+        </Card>
+      ) : (
+        <div className="responsive-grid">
+          {filteredAndSortedSubscribers.map((subscriber) => (
+            <SubscriberCard
               key={subscriber.id}
-              className="hover:shadow-md transition-shadow"
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-4 mb-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-emerald-100 rounded-full flex items-center justify-center">
-                        <User className="w-6 h-6 text-blue-600" />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {subscriber.name}
-                        </h3>
-                        <p className="text-gray-600 text-sm">
-                          تاريخ الاشتراك:{" "}
-                          {format(
-                            new Date(subscriber.created_at),
-                            "dd MMMM yyyy",
-                            { locale: ar },
-                          )}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <Phone className="w-4 h-4" />
-                        {subscriber.phone}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Weight className="w-4 h-4" />
-                        {subscriber.weight} كيلو
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Ruler className="w-4 h-4" />
-                        {subscriber.height} سم
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Sheet>
-                      <SheetTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => fetchSubscriberDetails(subscriber.id)}
-                        >
-                          <Eye className="w-4 h-4 ml-1" />
-                          عرض التفاصيل
-                        </Button>
-                      </SheetTrigger>
-                      <SheetContent side="right" className="w-full sm:max-w-lg">
-                        <SheetHeader>
-                          <SheetTitle>تفاصيل المشترك</SheetTitle>
-                        </SheetHeader>
-
-                        {isLoadingDetails ? (
-                          <div className="space-y-4 mt-6">
-                            <div className="animate-pulse space-y-3">
-                              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                              <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-                            </div>
-                          </div>
-                        ) : selectedSubscriber ? (
-                          <div className="space-y-6 mt-6">
-                            {/* Basic Info */}
-                            <div>
-                              <h3 className="font-semibold mb-3 flex items-center gap-2">
-                                <User className="w-4 h-4" />
-                                المعلومات الأساسية
-                              </h3>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">الاسم:</span>
-                                  <span className="font-medium">
-                                    {selectedSubscriber.name}
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">العمر:</span>
-                                  <span className="font-medium">
-                                    {selectedSubscriber.age} سنة
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">الوزن:</span>
-                                  <span className="font-medium">
-                                    {selectedSubscriber.weight} كيلو
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">الطول:</span>
-                                  <span className="font-medium">
-                                    {selectedSubscriber.height} سم
-                                  </span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="text-gray-600">الهاتف:</span>
-                                  <span className="font-medium">
-                                    {selectedSubscriber.phone}
-                                  </span>
-                                </div>
-                                {selectedSubscriber.notes && (
-                                  <div>
-                                    <span className="text-gray-600 block mb-1">
-                                      الملاحظات:
-                                    </span>
-                                    <p className="text-sm bg-gray-50 p-2 rounded">
-                                      {selectedSubscriber.notes}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <Separator />
-
-                            {/* Groups */}
-                            <div>
-                              <h3 className="font-semibold mb-3">المجموعات</h3>
-                              {selectedSubscriber.groups.length === 0 ? (
-                                <p className="text-gray-500 text-sm">
-                                  لا توجد مجموعات مضافة
-                                </p>
-                              ) : (
-                                <div className="space-y-4">
-                                  {selectedSubscriber.groups.map((group) => (
-                                    <div
-                                      key={group.id}
-                                      className="border rounded-lg p-3"
-                                    >
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <Badge
-                                          variant={
-                                            group.type === "course"
-                                              ? "default"
-                                              : "secondary"
-                                          }
-                                        >
-                                          {group.type === "course"
-                                            ? "تمارين"
-                                            : "غذائي"}
-                                        </Badge>
-                                        <span className="font-medium text-sm">
-                                          {group.title ||
-                                            (group.type === "course"
-                                              ? "مجموعة تمارين"
-                                              : "مجموعة غذائية")}
-                                        </span>
-                                      </div>
-                                      {group.group_items.length > 0 && (
-                                        <ul className="list-disc list-inside text-sm space-y-1 text-gray-600">
-                                          {group.group_items.map((item) => (
-                                            <li key={item.id}>{item.name}</li>
-                                          ))}
-                                        </ul>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex gap-2 pt-4">
-                              <Button
-                                onClick={handlePrintSubscriber}
-                                variant="outline"
-                                className="flex-1"
-                              >
-                                <Printer className="w-4 h-4 ml-1" />
-                                طباعة احترافية
-                              </Button>
-                            </div>
-                          </div>
-                        ) : null}
-                      </SheetContent>
-                    </Sheet>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deleteSubscriber(subscriber.id)}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* نظام التشخيص */}
-      <DatabaseDiagnostics />
+              subscriber={subscriber}
+              onDelete={handleDeleteSubscriber}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

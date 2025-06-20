@@ -1,35 +1,68 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  User,
+  Dumbbell,
+  Utensils,
+  Plus,
+  Trash2,
+  Save,
+  ArrowLeft,
+  Check,
+  Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, X, Edit, Trash2, User, Dumbbell, Apple } from "lucide-react";
-import { syncService } from "@/lib/sync";
-import type { CoursePoint, DietItem, Subscriber } from "@/lib/supabase";
+import { createRecord, SUPABASE_TABLES } from "@/lib/syncService";
+import { db } from "@/lib/database";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
-import { DatabaseDiagnostics } from "@/components/diagnostics/DatabaseDiagnostics";
 
-interface GroupData {
+interface CourseGroup {
   id: string;
-  title: string;
-  type: "course" | "diet";
-  items: { id: string; name: string }[];
+  name: string;
+  exercises: string[];
+}
+
+interface DietGroup {
+  id: string;
+  name: string;
+  items: string[];
+}
+
+interface CoursePoint {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+}
+
+interface DietItem {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
 }
 
 export default function AddSubscriber() {
   const navigate = useNavigate();
-  const [subscriberData, setSubscriberData] = useState({
+
+  // Available data from database
+  const [coursePoints, setCoursePoints] = useState<CoursePoint[]>([]);
+  const [dietItems, setDietItems] = useState<DietItem[]>([]);
+
+  // Subscriber info state
+  const [subscriberInfo, setSubscriberInfo] = useState({
     name: "",
     age: "",
     weight: "",
@@ -38,497 +71,723 @@ export default function AddSubscriber() {
     notes: "",
   });
 
-  const [groups, setGroups] = useState<GroupData[]>([]);
-  const [coursePoints, setCoursePoints] = useState<CoursePoint[]>([]);
-  const [dietItems, setDietItems] = useState<DietItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  // Courses state
+  const [courseGroups, setCourseGroups] = useState<CourseGroup[]>([]);
+  const [newCourseName, setNewCourseName] = useState("");
+  const [selectedExercises, setSelectedExercises] = useState<string[]>([]);
+  const [exerciseSearchTerm, setExerciseSearchTerm] = useState("");
 
-  // Modal states
-  const [isAddGroupModalOpen, setIsAddGroupModalOpen] = useState(false);
-  const [groupType, setGroupType] = useState<"course" | "diet">("course");
-  const [groupTitle, setGroupTitle] = useState("");
-  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  // Diet state
+  const [dietGroups, setDietGroups] = useState<DietGroup[]>([]);
+  const [newDietName, setNewDietName] = useState("");
+  const [selectedDietItems, setSelectedDietItems] = useState<string[]>([]);
+  const [dietSearchTerm, setDietSearchTerm] = useState("");
 
-  const fetchCoursePoints = async () => {
-    try {
-      const data = await syncService.getRecords("course_points");
-      setCoursePoints(data || []);
-    } catch (error) {
-      console.error("Error fetching course points:", error);
-    }
-  };
+  // Loading states
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedSteps, setSavedSteps] = useState({
+    info: false,
+    courses: false,
+    diet: false,
+  });
 
-  const fetchDietItems = async () => {
-    try {
-      const data = await syncService.getRecords("diet_items");
-      setDietItems(data || []);
-    } catch (error) {
-      console.error("Error fetching diet items:", error);
-    }
-  };
-
+  // Load available data from IndexedDB
   useEffect(() => {
-    fetchCoursePoints();
-    fetchDietItems();
+    const loadData = async () => {
+      try {
+        // Load course points from database
+        const coursePointsData = await db.coursePoints.toArray();
+        if (coursePointsData.length > 0) {
+          setCoursePoints(coursePointsData);
+        }
+
+        // Load diet items from database
+        const dietItemsData = await db.dietItems.toArray();
+        if (dietItemsData.length > 0) {
+          setDietItems(dietItemsData);
+        }
+      } catch (error) {
+        console.error("Error loading data:", error);
+      }
+    };
+
+    loadData();
   }, []);
 
-  const handleAddGroup = () => {
-    if (selectedItems.length === 0) {
-      toast.error("يرجى اختيار عناصر للمجموعة");
+  // Handle subscriber info save
+  const handleSaveInfo = async () => {
+    if (
+      !subscriberInfo.name ||
+      !subscriberInfo.age ||
+      !subscriberInfo.weight ||
+      !subscriberInfo.height
+    ) {
+      toast.error("يرجى ملء جميع الحقول الأساسية");
       return;
     }
 
-    const availableItems = groupType === "course" ? coursePoints : dietItems;
-    const groupItems = selectedItems.map((id) => {
-      const item = availableItems.find((item) => item.id === id);
-      return { id, name: item?.name || "" };
-    });
+    setIsSaving(true);
+    // Simulate API call
+    await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const newGroup: GroupData = {
+    setSavedSteps((prev) => ({ ...prev, info: true }));
+    toast.success("تم حفظ معلومات المشترك");
+    setIsSaving(false);
+  };
+
+  // Handle course group addition
+  const handleAddCourseGroup = () => {
+    if (selectedExercises.length === 0) {
+      toast.error("يرجى اختيار التمارين");
+      return;
+    }
+
+    const groupName =
+      newCourseName.trim() || `مجموعة ${courseGroups.length + 1}`;
+
+    const newGroup: CourseGroup = {
       id: Date.now().toString(),
-      title:
-        groupTitle ||
-        (groupType === "course" ? "مجموعة تمارين" : "مجموعة غذائية"),
-      type: groupType,
-      items: groupItems,
+      name: groupName,
+      exercises: [...selectedExercises],
     };
 
-    setGroups([...groups, newGroup]);
-    setGroupTitle("");
-    setSelectedItems([]);
-    setIsAddGroupModalOpen(false);
-    toast.success("تم إضافة المجموعة بنجاح");
+    setCourseGroups((prev) => [...prev, newGroup]);
+    setNewCourseName("");
+    setSelectedExercises([]);
+    setExerciseSearchTerm("");
+    toast.success("تم إضافة مجموعة الكورسات");
   };
 
-  const removeGroup = (groupId: string) => {
-    setGroups(groups.filter((group) => group.id !== groupId));
-    toast.success("تم حذف المجموعة");
+  // Handle diet group addition
+  const handleAddDietGroup = () => {
+    if (selectedDietItems.length === 0) {
+      toast.error("يرجى اختيار العناصر الغذائية");
+      return;
+    }
+
+    const groupName =
+      newDietName.trim() || `نظام غذائي ${dietGroups.length + 1}`;
+
+    const newGroup: DietGroup = {
+      id: Date.now().toString(),
+      name: groupName,
+      items: [...selectedDietItems],
+    };
+
+    setDietGroups((prev) => [...prev, newGroup]);
+    setNewDietName("");
+    setSelectedDietItems([]);
+    setDietSearchTerm("");
+    toast.success("تم إضافة المجموعة الغذائية");
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  // Handle final save
+  const handleFinalSave = async () => {
+    if (!savedSteps.info) {
+      toast.error("يرجى حفظ معلومات المشترك أولاً");
+      return;
+    }
+
+    setIsSaving(true);
 
     try {
-      // Validate required fields
-      if (!subscriberData.name || !subscriberData.phone) {
-        toast.error("يرجى ملء الحقول المطلوبة");
-        setIsLoading(false);
-        return;
-      }
-
-      // Insert subscriber
-      const subscriberId = await syncService.createRecord("subscribers", {
-        name: subscriberData.name,
-        age: parseInt(subscriberData.age) || 0,
-        weight: parseFloat(subscriberData.weight) || 0,
-        height: parseFloat(subscriberData.height) || 0,
-        phone: subscriberData.phone,
-        notes: subscriberData.notes,
+      // Create subscriber record
+      const subscriberId = await createRecord(SUPABASE_TABLES.subscribers, {
+        name: subscriberInfo.name,
+        age: parseInt(subscriberInfo.age),
+        weight: parseFloat(subscriberInfo.weight),
+        height: parseFloat(subscriberInfo.height),
+        phone: subscriberInfo.phone,
+        notes: subscriberInfo.notes || "",
       });
 
-      // Insert groups
-      for (const group of groups) {
-        const groupId = await syncService.createRecord("groups", {
+      // Create course groups and their items
+      for (const courseGroup of courseGroups) {
+        const groupId = await createRecord(SUPABASE_TABLES.groups, {
           subscriber_id: subscriberId,
-          title: group.title,
-          type: group.type,
+          name: courseGroup.name,
+          type: "course",
         });
 
-        // Insert group items
-        for (const item of group.items) {
-          await syncService.createRecord("group_items", {
+        // Create group items for exercises
+        for (const exercise of courseGroup.exercises) {
+          await createRecord(SUPABASE_TABLES.groupItems, {
             group_id: groupId,
-            name: item.name,
+            name: exercise,
+            description: "",
           });
         }
       }
 
-      toast.success("تم إضافة المشترك بنجاح");
-      navigate("/subscribers");
+      // Create diet groups and their items
+      for (const dietGroup of dietGroups) {
+        const groupId = await createRecord(SUPABASE_TABLES.groups, {
+          subscriber_id: subscriberId,
+          name: dietGroup.name,
+          type: "diet",
+        });
+
+        // Create group items for diet items
+        for (const dietItem of dietGroup.items) {
+          await createRecord(SUPABASE_TABLES.groupItems, {
+            group_id: groupId,
+            name: dietItem,
+            description: "",
+          });
+        }
+      }
+
+      setSavedSteps({ info: true, courses: true, diet: true });
+
+      setTimeout(() => {
+        navigate("/subscribers");
+      }, 1500);
     } catch (error) {
-      toast.error("خطأ في حفظ البيانات");
+      console.error("Error saving subscriber:", error);
+      toast.error("حدث خطأ أثناء حفظ المشترك");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
-  const availableItems = groupType === "course" ? coursePoints : dietItems;
+  const toggleExercise = (exercise: string) => {
+    setSelectedExercises((prev) =>
+      prev.includes(exercise)
+        ? prev.filter((e) => e !== exercise)
+        : [...prev, exercise],
+    );
+  };
+
+  const toggleDietItem = (item: string) => {
+    setSelectedDietItems((prev) =>
+      prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item],
+    );
+  };
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">إضافة مشترك جديد</h1>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => navigate("/subscribers")}
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold">إضافة مشترك جديد</h1>
+            <p className="text-muted-foreground">
+              إنشاء ملف شخصي كامل للمشترك مع الكورسات والأنظمة الغذائية
+            </p>
+          </div>
+        </div>
+        <Button
+          className="gym-button"
+          onClick={handleFinalSave}
+          disabled={isSaving || !savedSteps.info}
+        >
+          {isSaving ? "جاري الحفظ..." : "حفظ المشترك"}
+          <Save className="w-4 h-4 mr-2" />
+        </Button>
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="grid grid-cols-1 lg:grid-cols-3 gap-6"
-      >
-        {/* Subscriber Info */}
-        <Card>
+      {/* Progress Indicators */}
+      <div className="flex gap-4 p-4 bg-muted/50 rounded-lg">
+        <div
+          className={`flex items-center gap-2 ${savedSteps.info ? "text-success" : "text-muted-foreground"}`}
+        >
+          {savedSteps.info ? (
+            <Check className="w-4 h-4" />
+          ) : (
+            <User className="w-4 h-4" />
+          )}
+          <span className="text-sm">معلومات المشترك</span>
+        </div>
+        <div
+          className={`flex items-center gap-2 ${courseGroups.length > 0 ? "text-success" : "text-muted-foreground"}`}
+        >
+          <Dumbbell className="w-4 h-4" />
+          <span className="text-sm">الكورسات ({courseGroups.length})</span>
+        </div>
+        <div
+          className={`flex items-center gap-2 ${dietGroups.length > 0 ? "text-success" : "text-muted-foreground"}`}
+        >
+          <Utensils className="w-4 h-4" />
+          <span className="text-sm">
+            الأنظمة الغذائية ({dietGroups.length})
+          </span>
+        </div>
+      </div>
+
+      {/* Three Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+        {/* Column 1: Subscriber Info */}
+        <Card className="gym-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="w-5 h-5" />
+            <CardTitle className="flex items-center gap-3">
+              <User className="w-5 h-5 text-primary" />
               معلومات المشترك
+              {savedSteps.info && <Check className="w-5 h-5 text-success" />}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="name">الاسم الكامل *</Label>
               <Input
                 id="name"
-                value={subscriberData.name}
+                value={subscriberInfo.name}
                 onChange={(e) =>
-                  setSubscriberData({ ...subscriberData, name: e.target.value })
+                  setSubscriberInfo((prev) => ({
+                    ...prev,
+                    name: e.target.value,
+                  }))
                 }
-                required
+                placeholder="أدخل الاسم الكامل"
+                className="text-right"
               />
             </div>
 
-            <div>
-              <Label htmlFor="age">العمر</Label>
-              <Input
-                id="age"
-                type="number"
-                value={subscriberData.age}
-                onChange={(e) =>
-                  setSubscriberData({ ...subscriberData, age: e.target.value })
-                }
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="age">العمر *</Label>
+                <Input
+                  id="age"
+                  type="number"
+                  value={subscriberInfo.age}
+                  onChange={(e) =>
+                    setSubscriberInfo((prev) => ({
+                      ...prev,
+                      age: e.target.value,
+                    }))
+                  }
+                  placeholder="العمر"
+                  className="text-right"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="weight">الوزن (كغ) *</Label>
+                <Input
+                  id="weight"
+                  type="number"
+                  step="0.1"
+                  value={subscriberInfo.weight}
+                  onChange={(e) =>
+                    setSubscriberInfo((prev) => ({
+                      ...prev,
+                      weight: e.target.value,
+                    }))
+                  }
+                  placeholder="الوزن"
+                  className="text-right"
+                />
+              </div>
             </div>
 
-            <div>
-              <Label htmlFor="weight">الوزن (كيلو)</Label>
-              <Input
-                id="weight"
-                type="number"
-                step="0.1"
-                value={subscriberData.weight}
-                onChange={(e) =>
-                  setSubscriberData({
-                    ...subscriberData,
-                    weight: e.target.value,
-                  })
-                }
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="height">الطول (سم)</Label>
+            <div className="space-y-2">
+              <Label htmlFor="height">الطول (سم) *</Label>
               <Input
                 id="height"
                 type="number"
-                value={subscriberData.height}
+                value={subscriberInfo.height}
                 onChange={(e) =>
-                  setSubscriberData({
-                    ...subscriberData,
+                  setSubscriberInfo((prev) => ({
+                    ...prev,
                     height: e.target.value,
-                  })
+                  }))
                 }
+                placeholder="الطول"
+                className="text-right"
               />
             </div>
 
-            <div>
-              <Label htmlFor="phone">رقم الهاتف *</Label>
+            <div className="space-y-2">
+              <Label htmlFor="phone">رقم الهاتف</Label>
               <Input
                 id="phone"
-                value={subscriberData.phone}
+                value={subscriberInfo.phone}
                 onChange={(e) =>
-                  setSubscriberData({
-                    ...subscriberData,
+                  setSubscriberInfo((prev) => ({
+                    ...prev,
                     phone: e.target.value,
-                  })
+                  }))
                 }
-                required
+                placeholder="رقم الهاتف"
+                className="text-right"
               />
             </div>
 
-            <div>
-              <Label htmlFor="notes">الملاحظات</Label>
+            <div className="space-y-2">
+              <Label htmlFor="notes">ملاحظات</Label>
               <Textarea
                 id="notes"
-                value={subscriberData.notes}
+                value={subscriberInfo.notes}
                 onChange={(e) =>
-                  setSubscriberData({
-                    ...subscriberData,
+                  setSubscriberInfo((prev) => ({
+                    ...prev,
                     notes: e.target.value,
-                  })
+                  }))
                 }
+                placeholder="أي ملاحظات خاصة..."
+                className="text-right"
+                rows={3}
               />
             </div>
+
+            <Button
+              className="w-full gym-button"
+              onClick={handleSaveInfo}
+              disabled={isSaving || savedSteps.info}
+            >
+              {savedSteps.info ? "تم الحفظ" : "حفظ المعلومات"}
+              {savedSteps.info ? (
+                <Check className="w-4 h-4 mr-2" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+            </Button>
           </CardContent>
         </Card>
 
-        {/* Courses */}
-        <Card>
+        {/* Column 2: Courses */}
+        <Card className="gym-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Dumbbell className="w-5 h-5" />
-              مجموعات الكورسات
+            <CardTitle className="flex items-center gap-3">
+              <Dumbbell className="w-5 h-5 text-primary" />
+              الكورسات
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Dialog
-              open={isAddGroupModalOpen && groupType === "course"}
-              onOpenChange={(open) => {
-                if (!open) setIsAddGroupModalOpen(false);
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    setGroupType("course");
-                    setIsAddGroupModalOpen(true);
-                  }}
-                >
-                  <Plus className="w-4 h-4 ml-2" />
-                  إضافة مجموعة كورسات
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>إضافة مجموعة كورسات</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="courseTitle">
-                      عنوان المجموعة (اختياري)
-                    </Label>
-                    <Input
-                      id="courseTitle"
-                      value={groupTitle}
-                      onChange={(e) => setGroupTitle(e.target.value)}
-                      placeholder="مثال: اليوم الأول"
-                    />
-                  </div>
+            {/* Add Course Group Form */}
+            <div className="space-y-3 p-3 border rounded-lg">
+              <div className="space-y-2">
+                <Label>اسم مجموعة الكورسات (اختياري)</Label>
+                <Input
+                  value={newCourseName}
+                  onChange={(e) => setNewCourseName(e.target.value)}
+                  placeholder="سيتم إنشاء اسم تلقائي إذا ترك فارغاً"
+                  className="text-right"
+                />
+              </div>
 
-                  <div>
-                    <Label>اختيار التمارين</Label>
-                    <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-2">
-                      {availableItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center space-x-2"
-                        >
-                          <Checkbox
-                            id={item.id}
-                            checked={selectedItems.includes(item.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedItems([...selectedItems, item.id]);
-                              } else {
-                                setSelectedItems(
-                                  selectedItems.filter((id) => id !== item.id),
-                                );
-                              }
-                            }}
-                          />
-                          <Label htmlFor={item.id} className="flex-1 text-sm">
-                            {item.name}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      onClick={handleAddGroup}
-                      className="flex-1"
-                    >
-                      إضافة
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsAddGroupModalOpen(false)}
-                    >
-                      إلغاء
-                    </Button>
-                  </div>
+              <div className="space-y-2">
+                <Label>البحث عن التمارين</Label>
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={exerciseSearchTerm}
+                    onChange={(e) => setExerciseSearchTerm(e.target.value)}
+                    placeholder="ابحث عن تمرين..."
+                    className="pr-10 text-right"
+                  />
                 </div>
-              </DialogContent>
-            </Dialog>
+              </div>
 
-            <div className="space-y-3">
-              {groups
-                .filter((group) => group.type === "course")
-                .map((group) => (
-                  <div key={group.id} className="border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">{group.title}</h4>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeGroup(group.id)}
+              <div className="space-y-2">
+                <Label>اختيار التمارين ({selectedExercises.length} محدد)</Label>
+                <div className="max-h-48 overflow-y-auto border rounded-lg">
+                  {coursePoints
+                    .filter(
+                      (point) =>
+                        point.name
+                          .toLowerCase()
+                          .includes(exerciseSearchTerm.toLowerCase()) ||
+                        point.description
+                          .toLowerCase()
+                          .includes(exerciseSearchTerm.toLowerCase()) ||
+                        point.category
+                          .toLowerCase()
+                          .includes(exerciseSearchTerm.toLowerCase()),
+                    )
+                    .map((coursePoint) => (
+                      <div
+                        key={coursePoint.id}
+                        onClick={() => toggleExercise(coursePoint.name)}
+                        className={`p-3 border-b last:border-b-0 cursor-pointer transition-all hover:bg-muted/50 ${
+                          selectedExercises.includes(coursePoint.name)
+                            ? "bg-primary/10 border-l-4 border-l-primary"
+                            : ""
+                        }`}
                       >
-                        <X className="w-4 h-4" />
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <span className="text-sm font-medium">
+                              {coursePoint.name}
+                            </span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">
+                                {coursePoint.category}
+                              </Badge>
+                              {selectedExercises.includes(coursePoint.name) && (
+                                <Badge variant="default" className="text-xs">
+                                  محدد ✓
+                                </Badge>
+                              )}
+                            </div>
+                            {coursePoint.description && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {coursePoint.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {coursePoints.filter(
+                    (point) =>
+                      point.name
+                        .toLowerCase()
+                        .includes(exerciseSearchTerm.toLowerCase()) ||
+                      point.description
+                        .toLowerCase()
+                        .includes(exerciseSearchTerm.toLowerCase()) ||
+                      point.category
+                        .toLowerCase()
+                        .includes(exerciseSearchTerm.toLowerCase()),
+                  ).length === 0 && (
+                    <div className="p-4 text-center text-muted-foreground text-sm">
+                      لا توجد تمارين مطابقة للبحث
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                onClick={handleAddCourseGroup}
+                className="w-full"
+                variant="outline"
+                disabled={selectedExercises.length === 0}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                إضافة مجموعة كورسات ({selectedExercises.length} تمرين)
+              </Button>
+            </div>
+
+            {/* Course Groups List */}
+            <div className="space-y-3">
+              {courseGroups.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  لم يتم إضافة مجموعات كورسات بعد
+                </div>
+              ) : (
+                courseGroups.map((group) => (
+                  <div
+                    key={group.id}
+                    className="p-3 border rounded-lg bg-muted/20"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <h4 className="font-semibold">{group.name}</h4>
+                        <span className="text-xs text-muted-foreground">
+                          {group.exercises.length} تمرين
+                        </span>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() =>
+                          setCourseGroups((prev) =>
+                            prev.filter((g) => g.id !== group.id),
+                          )
+                        }
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {group.items.map((item) => (
-                        <Badge key={item.id} variant="secondary">
-                          {item.name}
+                      {group.exercises.map((exercise, index) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="text-xs"
+                        >
+                          {exercise}
                         </Badge>
                       ))}
                     </div>
                   </div>
-                ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Diet */}
-        <Card>
+        {/* Column 3: Diet */}
+        <Card className="gym-card">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Apple className="w-5 h-5" />
+            <CardTitle className="flex items-center gap-3">
+              <Utensils className="w-5 h-5 text-gym-orange" />
               الأنظمة الغذائية
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Dialog
-              open={isAddGroupModalOpen && groupType === "diet"}
-              onOpenChange={(open) => {
-                if (!open) setIsAddGroupModalOpen(false);
-              }}
-            >
-              <DialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    setGroupType("diet");
-                    setIsAddGroupModalOpen(true);
-                  }}
-                >
-                  <Plus className="w-4 h-4 ml-2" />
-                  إضافة مجموعة غذائية
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>إضافة مجموعة غذائية</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="dietTitle">عنوان المجموعة (اختياري)</Label>
-                    <Input
-                      id="dietTitle"
-                      value={groupTitle}
-                      onChange={(e) => setGroupTitle(e.target.value)}
-                      placeholder="مثال: الفطور"
-                    />
-                  </div>
+            {/* Add Diet Group Form */}
+            <div className="space-y-3 p-3 border rounded-lg">
+              <div className="space-y-2">
+                <Label>اسم المجموعة الغذائية (اختياري)</Label>
+                <Input
+                  value={newDietName}
+                  onChange={(e) => setNewDietName(e.target.value)}
+                  placeholder="سيتم إنشاء اسم تلقائي إذا ترك فارغاً"
+                  className="text-right"
+                />
+              </div>
 
-                  <div>
-                    <Label>اختيار العناصر الغذائية</Label>
-                    <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-2">
-                      {availableItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center space-x-2"
-                        >
-                          <Checkbox
-                            id={item.id}
-                            checked={selectedItems.includes(item.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedItems([...selectedItems, item.id]);
-                              } else {
-                                setSelectedItems(
-                                  selectedItems.filter((id) => id !== item.id),
-                                );
-                              }
-                            }}
-                          />
-                          <Label htmlFor={item.id} className="flex-1 text-sm">
-                            {item.name}
-                          </Label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      onClick={handleAddGroup}
-                      className="flex-1"
-                    >
-                      إضافة
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsAddGroupModalOpen(false)}
-                    >
-                      إلغاء
-                    </Button>
-                  </div>
+              <div className="space-y-2">
+                <Label>البحث عن العناصر الغذائية</Label>
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    value={dietSearchTerm}
+                    onChange={(e) => setDietSearchTerm(e.target.value)}
+                    placeholder="ابحث عن عنصر غذائي..."
+                    className="pr-10 text-right"
+                  />
                 </div>
-              </DialogContent>
-            </Dialog>
+              </div>
 
-            <div className="space-y-3">
-              {groups
-                .filter((group) => group.type === "diet")
-                .map((group) => (
-                  <div key={group.id} className="border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium">{group.title}</h4>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeGroup(group.id)}
+              <div className="space-y-2">
+                <Label>
+                  اختيار العناصر الغذائية ({selectedDietItems.length} محدد)
+                </Label>
+                <div className="max-h-48 overflow-y-auto border rounded-lg">
+                  {dietItems
+                    .filter(
+                      (item) =>
+                        item.name
+                          .toLowerCase()
+                          .includes(dietSearchTerm.toLowerCase()) ||
+                        item.description
+                          .toLowerCase()
+                          .includes(dietSearchTerm.toLowerCase()) ||
+                        item.category
+                          .toLowerCase()
+                          .includes(dietSearchTerm.toLowerCase()),
+                    )
+                    .map((dietItem) => (
+                      <div
+                        key={dietItem.id}
+                        onClick={() => toggleDietItem(dietItem.name)}
+                        className={`p-3 border-b last:border-b-0 cursor-pointer transition-all hover:bg-muted/50 ${
+                          selectedDietItems.includes(dietItem.name)
+                            ? "bg-gym-orange/10 border-l-4 border-l-gym-orange"
+                            : ""
+                        }`}
                       >
-                        <X className="w-4 h-4" />
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <span className="text-sm font-medium">
+                              {dietItem.name}
+                            </span>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-xs">
+                                {dietItem.category}
+                              </Badge>
+                              {selectedDietItems.includes(dietItem.name) && (
+                                <Badge
+                                  variant="default"
+                                  className="text-xs bg-gym-orange"
+                                >
+                                  محدد ✓
+                                </Badge>
+                              )}
+                              {dietItem.calories && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {dietItem.calories} سعرة
+                                </Badge>
+                              )}
+                            </div>
+                            {dietItem.description && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {dietItem.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {dietItems.filter(
+                    (item) =>
+                      item.name
+                        .toLowerCase()
+                        .includes(dietSearchTerm.toLowerCase()) ||
+                      item.description
+                        .toLowerCase()
+                        .includes(dietSearchTerm.toLowerCase()) ||
+                      item.category
+                        .toLowerCase()
+                        .includes(dietSearchTerm.toLowerCase()),
+                  ).length === 0 && (
+                    <div className="p-4 text-center text-muted-foreground text-sm">
+                      لا توجد عناصر غذائية مطابقة للبحث
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <Button
+                onClick={handleAddDietGroup}
+                className="w-full"
+                variant="outline"
+                disabled={selectedDietItems.length === 0}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                إضافة مجموعة غذائية ({selectedDietItems.length} عنصر)
+              </Button>
+            </div>
+
+            {/* Diet Groups List */}
+            <div className="space-y-3">
+              {dietGroups.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  لم يتم إضافة مجموعات غذائية بعد
+                </div>
+              ) : (
+                dietGroups.map((group) => (
+                  <div
+                    key={group.id}
+                    className="p-3 border rounded-lg bg-gym-orange/5"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <h4 className="font-semibold">{group.name}</h4>
+                        <span className="text-xs text-muted-foreground">
+                          {group.items.length} عنصر غذائي
+                        </span>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() =>
+                          setDietGroups((prev) =>
+                            prev.filter((g) => g.id !== group.id),
+                          )
+                        }
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {group.items.map((item) => (
-                        <Badge key={item.id} variant="secondary">
-                          {item.name}
+                      {group.items.map((item, index) => (
+                        <Badge
+                          key={index}
+                          variant="outline"
+                          className="text-xs"
+                        >
+                          {item}
                         </Badge>
                       ))}
                     </div>
                   </div>
-                ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
-
-        {/* Submit Button */}
-        <div className="lg:col-span-3">
-          <div className="flex gap-4 justify-end">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate("/subscribers")}
-            >
-              إلغاء
-            </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="bg-gradient-to-r from-blue-600 to-emerald-600"
-            >
-              {isLoading ? "جاري الحفظ..." : "حفظ كل البيانات"}
-            </Button>
-          </div>
-        </div>
-      </form>
-
-      {/* نظام التشخيص */}
-      <DatabaseDiagnostics />
+      </div>
     </div>
   );
 }

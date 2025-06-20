@@ -1,24 +1,27 @@
 {
-  "name": "صالة حسام جم - نظام إدارة شامل",
-  "short_name": "صالة حس��م جم",
-  "description": "نظام إدارة متكامل لصالات الألعاب الرياضية مع دعم العمل بدون إنترنت",
+  "name": "صالة حسام جم - نظام الإدارة",
+  "short_name": "صالة حسام جم",
+  "description": "نظام إدارة شامل لصالة حسام جم الرياضية مع دعم العمل بدون إنترنت",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1e40af",
-  "orientation": "portrait-primary",
-  "categories": ["business", "fitness", "productivity"],
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#0f0f23",
+  "theme_color": "#16a34a",
+  "orientation": "any",
   "lang": "ar",
   "dir": "rtl",
+  "categories": ["fitness", "business", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/gym-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/gym-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -26,42 +29,42 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshot1.png",
+      "src": "/screenshot-desktop.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide"
     },
     {
-      "src": "/screenshot2.png",
-      "sizes": "750x1334",
+      "src": "/screenshot-mobile.png",
+      "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow"
     }
   ],
-  "related_applications": [],
-  "prefer_related_applications": false,
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "shortcuts": [
     {
       "name": "المشتركين",
       "short_name": "المشتركين",
-      "description": "عرض جميع المشتركين",
+      "description": "عرض قائمة المشتركين",
       "url": "/subscribers",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/gym-icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "إضافة مشترك",
-      "short_name": "إضافة مشترك",
+      "short_name": "إضافة",
       "description": "إضافة مشترك جديد",
       "url": "/add-subscriber",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "المخزن",
-      "short_name": "المخزن",
-      "description": "إدارة المخزن والمبيعات",
-      "url": "/store",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/gym-icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

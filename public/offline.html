@@ -3,77 +3,225 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>صالة حسام جم - غير متصل</title>
+    <title>وضع عدم الاتصال - صالة حسام جم</title>
     <style>
-      body {
-        font-family: "Cairo", "Noto Sans Arabic", sans-serif;
+      * {
         margin: 0;
         padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          "Cairo",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 100%);
+        color: white;
         min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        background: linear-gradient(135deg, #1e40af, #059669);
-        color: white;
-        text-align: center;
+        padding: 20px;
         direction: rtl;
       }
+
       .container {
-        max-width: 400px;
-        padding: 2rem;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 1rem;
-        backdrop-filter: blur(10px);
+        text-align: center;
+        max-width: 500px;
+        width: 100%;
       }
-      .icon {
-        font-size: 4rem;
-        margin-bottom: 1rem;
+
+      .logo {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: #16a34a;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 30px;
+        font-size: 28px;
+        font-weight: bold;
+        box-shadow: 0 10px 30px rgba(22, 163, 74, 0.3);
       }
+
       h1 {
-        font-size: 1.5rem;
-        margin-bottom: 1rem;
+        font-size: 2.5rem;
+        margin-bottom: 20px;
+        background: linear-gradient(45deg, #16a34a, #22c55e);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
-      p {
-        margin-bottom: 2rem;
-        opacity: 0.9;
+
+      .subtitle {
+        font-size: 1.2rem;
+        margin-bottom: 30px;
+        opacity: 0.8;
       }
+
+      .features {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 30px;
+        margin: 30px 0;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .features h3 {
+        color: #22c55e;
+        margin-bottom: 20px;
+        font-size: 1.3rem;
+      }
+
+      .feature-list {
+        list-style: none;
+        text-align: right;
+      }
+
+      .feature-list li {
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .feature-list li:last-child {
+        border-bottom: none;
+      }
+
+      .check {
+        color: #22c55e;
+        font-weight: bold;
+      }
+
       .retry-btn {
-        background: white;
-        color: #1e40af;
+        background: linear-gradient(45deg, #16a34a, #22c55e);
+        color: white;
         border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
+        padding: 15px 30px;
+        border-radius: 50px;
+        font-size: 1.1rem;
         font-weight: bold;
         cursor: pointer;
-        font-size: 1rem;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+        margin-top: 20px;
       }
+
       .retry-btn:hover {
-        background: #f3f4f6;
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(22, 163, 74, 0.4);
+      }
+
+      .connection-status {
+        margin-top: 20px;
+        padding: 10px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+      }
+
+      .offline {
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid #ef4444;
+        color: #fca5a5;
+      }
+
+      .online {
+        background: rgba(34, 197, 94, 0.2);
+        border: 1px solid #22c55e;
+        color: #86efac;
+      }
+
+      @media (max-width: 640px) {
+        h1 {
+          font-size: 2rem;
+        }
+
+        .subtitle {
+          font-size: 1rem;
+        }
+
+        .features {
+          padding: 20px;
+        }
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <div class="icon">📡</div>
-      <h1>غير متصل بالإنترنت</h1>
-      <p>
-        التطبيق يعمل في وضع عدم الاتصال. ستتم مزامنة البيانات عند عودة الاتصال.
-      </p>
-      <button class="retry-btn" onclick="window.location.reload()">
-        إعادة المحاولة
+      <div class="logo">حسام</div>
+
+      <h1>صالة حسام جم</h1>
+      <p class="subtitle">تعمل في وضع عدم الاتصال</p>
+
+      <div class="features">
+        <h3>المزايا المتاحة بدون إنترنت:</h3>
+        <ul class="feature-list">
+          <li><span class="check">✓</span> عرض المشتركين المحفوظين</li>
+          <li><span class="check">✓</span> إدارة الكورسات والتمارين</li>
+          <li><span class="check">✓</span> إدارة الأنظمة الغذائية</li>
+          <li><span class="check">✓</span> إدارة المخزن والمنتجات</li>
+          <li><span class="check">✓</span> إنشاء المبيعات والفواتير</li>
+          <li><span class="check">✓</span> طباعة التقارير والفواتير</li>
+        </ul>
+      </div>
+
+      <div class="connection-status offline" id="connectionStatus">
+        <strong>⚠️ لا يوجد اتصال بالإنترنت</strong><br />
+        سيتم حفظ التغييرات محلياً ومزامنتها عند عودة الاتصال
+      </div>
+
+      <button class="retry-btn" onclick="checkConnection()">
+        محاولة الاتصال مرة أخرى
       </button>
     </div>
 
     <script>
-      // Check for online status
-      window.addEventListener("online", () => {
-        window.location.reload();
-      });
+      // Check connection status
+      function updateConnectionStatus() {
+        const status = document.getElementById("connectionStatus");
+        if (navigator.onLine) {
+          status.className = "connection-status online";
+          status.innerHTML =
+            "<strong>✓ متصل بالإنترنت</strong><br>يمكنك الآن استكمال العمل بشكل طبيعي";
+
+          // Automatically redirect after 2 seconds if online
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 2000);
+        } else {
+          status.className = "connection-status offline";
+          status.innerHTML =
+            "<strong>⚠️ لا يوجد اتصال بالإنترنت</strong><br>سيتم حفظ التغييرات محلياً ومزامنتها عند عودة الاتصال";
+        }
+      }
+
+      function checkConnection() {
+        updateConnectionStatus();
+        if (navigator.onLine) {
+          window.location.href = "/";
+        }
+      }
+
+      // Listen for online/offline events
+      window.addEventListener("online", updateConnectionStatus);
+      window.addEventListener("offline", updateConnectionStatus);
+
+      // Initial status check
+      updateConnectionStatus();
 
       // Auto-retry every 30 seconds
       setInterval(() => {
-        if (navigator.onLine) {
-          window.location.reload();
+        if (!navigator.onLine) {
+          updateConnectionStatus();
         }
       }, 30000);
     </script>

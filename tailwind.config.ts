@@ -12,12 +12,32 @@ export default {
   theme: {
     container: {
       center: true,
-      padding: "2rem",
+      padding: {
+        DEFAULT: "1rem",
+        sm: "1.5rem",
+        lg: "2rem",
+      },
       screens: {
+        sm: "640px",
+        md: "768px",
+        lg: "1024px",
+        xl: "1280px",
         "2xl": "1400px",
       },
     },
+    screens: {
+      xs: "475px",
+      sm: "640px",
+      md: "768px",
+      lg: "1024px",
+      xl: "1280px",
+      "2xl": "1400px",
+    },
     extend: {
+      fontFamily: {
+        cairo: ["Cairo", "sans-serif"],
+        sans: ["Cairo", "system-ui", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -62,14 +82,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        // Gym theme colors
         gym: {
-          primary: "#1e40af", // Blue 700
-          secondary: "#059669", // Emerald 600
-          accent: "#dc2626", // Red 600
-          dark: "#1f2937", // Gray 800
-          light: "#f8fafc", // Slate 50
+          orange: "hsl(var(--gym-orange))",
+          "orange-foreground": "hsl(var(--gym-orange-foreground))",
+          dark: "hsl(var(--gym-dark))",
+          gray: "hsl(var(--gym-gray))",
         },
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -97,15 +117,6 @@ export default {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-      },
-      fontFamily: {
-        arabic: [
-          "Cairo",
-          "Noto Sans Arabic",
-          "Amiri",
-          "system-ui",
-          "sans-serif",
-        ],
       },
     },
   },
